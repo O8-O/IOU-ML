@@ -7,7 +7,7 @@ from detectron2.config import get_cfg
 from detectron2.data.detection_utils import read_image
 from detectron2.utils.logger import setup_logger
 
-from predictor import VisualizationDemo
+from modules.predictor import VisualizationDemo
 
 # constants
 WINDOW_NAME = "IOU Segmentation"
@@ -47,14 +47,12 @@ def get_only_instance_image(input_file, masks, height, width, output_file=None):
     cv2.imshow(WINDOW_NAME, masked_image)
     if cv2.waitKey(0) == 27:
         visualized_output.save(output_file)
-        print("")
-
 
 if __name__ == "__main__":
     mp.set_start_method("spawn", force=True)
     args_list = [
-        "configs/COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml", 
-        "chair1.jpg", 
+        "modules/configs/COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml", 
+        "Image/chair1.jpg", 
         0.6, 
         ["MODEL.WEIGHTS", "detectron2://COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x/137849600/model_final_f10217.pkl"],
         "chair1_masked.jpg"
@@ -69,7 +67,7 @@ if __name__ == "__main__":
 
     # 계산한 prediction에서 mask를 가져옴.
     masks = predictions['instances'].get_fields()["pred_masks"]
-    masks = masks.tolist()
+    masks = masks.tolist()  # masks 는 TF value의 tensor 값들
     (height, width) = predictions['instances'].image_size
     instance_number = len(predictions['instances'])
 
