@@ -12,6 +12,8 @@ from modules.predictor import VisualizationDemo
 # constants
 WINDOW_NAME = "IOU Segmentation"
 FILE_NAME = 1
+dir_x = [0, 0, 1, -1]
+dir_y = [1, -1, 0, 0]
 
 def setup_cfg(args):
     # load config from file and command-line arguments
@@ -48,6 +50,106 @@ def get_only_instance_image(input_file, masks, height, width, output_file=None):
     if cv2.waitKey(0) == 27:
         visualized_output.save(output_file)
 
+def get_largest_part(mask, height, width, attach_ratio=0.15):
+    '''
+        TODO : attach_ration 이유 정하기
+        mask    : list_2D, True False 배열의 mask
+        mask의 가장 큰 True 부분을 찾고, 그 부분만 True이고, 나머지는 False로 Output 한다.
+    '''
+    divided_class, class_count, class_length = get_divied_class(mask, height, width)
+
+    # 가장 큰것 하나 고르기
+    max_indx = [1]
+    for c in range(1, class_length):
+        if class_count[c] > class_count[max_indx[0] - 1]:
+            max_indx = [c + 1]
+
+    # 비율별로 큰것과 비슷한 것은 다 담기
+    for c in range(0, class_length):
+        if class_count[c] > class_count[max_indx[0] - 1] * (1 - attach_ratio) and class_count[c] < class_count[max_indx[0] - 1] * attach_ratio:
+            max_indx.append(c + 1)
+    
+    # 비슷한 것들을 모아서 하나의 Mask로 만들기.
+    return set_selected_class(divided_class, max_indx, height, width)
+
+def set_selected_class(divided_class, selected_class, height, width):
+    '''
+    # Set True at selected class number. If else, set False.
+    '''
+    largest_part_mask = [[False for _ in range(0, width)] for _ in range(0, height)]
+    for h in range(0, height):
+        for w in range(0, width):
+            if divided_class[h][w] in selected_class:
+                largest_part_mask[h][w] = True
+
+    return largest_part_mask
+
+def set_mask_class(mask, visited, divided_class, class_length, start_index, img_size):
+    '''
+    mask[h][w] 에서 시작해서 연결된 모든 곳의 좌표에 divided_class list에다가 class_length 값을 대입해 놓는다.
+    그 class 의 갯수를 return
+    '''
+    count = 1
+    que = [(start_index[0], start_index[1])]
+    while que:
+        now = que[0]
+        del que[0]
+        # 방문한 곳은 방문하지 않음.
+        if visited[now[0]][now[1]]:
+            continue
+
+        visited[now[0]][now[1]] = True
+        if mask[now[0]][now[1]]:
+            divided_class[now[0]][now[1]] = class_length
+            count += 1
+        for direction in range(0, 4):
+            if can_go(now[0], now[1], img_size[0], img_size[1], direction) and mask[now[0] + dir_x[direction]][now[1] + dir_y[direction]]:
+                que.append((now[0] + dir_x[direction], now[1] + dir_y[direction]))
+    return count
+
+def can_go(x, y, height, width, direction):
+    # 주어진 범위 밖으로 나가는지 체크
+    x_check = x + dir_x[direction] > -1 and x + dir_x[direction] < height
+    y_check = y + dir_y[direction] > -1 and y + dir_y[direction] < width
+    return x_check and y_check
+
+def get_divied_class(mask, height, width):
+    '''
+        mask    : list_2D, True False 배열의 mask
+        return
+            divided_class : 0 ~ N list_2D. 각각은 아무것도 없으면 0, 아니면 각 class number.
+            class_count : 각 class들의 숫자.
+            class_length : class의 갯수
+    '''
+    # Initializing.
+    divided_class = [[0 for _ in range(0, width)] for _ in range(0, height)]
+    visited = [[False for _ in range(0, width)] for _ in range(0, height)]
+    class_count = []
+    class_length = 0
+
+    for h in range(0, height):
+        for w in range(0, width):
+            if visited[h][w]:
+                continue
+            if mask[h][w]:
+                # BFS로 True로 되어있는 부분을 탐색.
+                class_length += 1
+                count = set_mask_class(mask, visited, divided_class, class_length, (h, w), (height, width))
+                class_count.append(count)
+    
+    return divided_class, class_count, class_length
+
+def print_list_sparse(li, height, width, density=7):
+    '''
+        li : printing list.
+        height, width : List Size
+        density : 얼마나 띄엄띄엄 list를 출력 할 것인지.
+    '''
+    for h in range(0, height, density):
+        for w in range(0, width, density):
+            print(li[h][w], end=" ")
+        print()
+
 if __name__ == "__main__":
     mp.set_start_method("spawn", force=True)
     args_list = [
@@ -70,7 +172,9 @@ if __name__ == "__main__":
     masks = masks.tolist()  # masks 는 TF value의 tensor 값들
     (height, width) = predictions['instances'].image_size
     instance_number = len(predictions['instances'])
-
+    
     for i in range(0, instance_number):
-        get_only_instance_image(args_list[FILE_NAME], masks[i], height, width)
+        mask = get_largest_part(masks[i], height, width)
+        get_only_instance_image(args_list[FILE_NAME], mask, height, width)
+    
     
