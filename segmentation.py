@@ -68,6 +68,10 @@ def get_largest_part(mask, height, width, attach_ratio=0.15):
     for c in range(0, class_length):
         if class_count[c] > class_count[max_indx[0] - 1] * (1 - attach_ratio) and class_count[c] < class_count[max_indx[0] - 1] * attach_ratio:
             max_indx.append(c + 1)
+
+    # 근처에 있는 n 픽셀 거리 안에있는것도 모으기
+    for mi in max_indx:
+        add_n_pixel_mask(divided_class, mi, class_boundary[mi-1], height, width)
     
     # 비슷한 것들을 모아서 하나의 Mask로 만들기.
     return set_selected_class(divided_class, max_indx, height, width)
