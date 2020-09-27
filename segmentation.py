@@ -56,7 +56,7 @@ def get_largest_part(mask, height, width, attach_ratio=0.15):
         mask    : list_2D, True False 배열의 mask
         mask의 가장 큰 True 부분을 찾고, 그 부분만 True이고, 나머지는 False로 Output 한다.
     '''
-    divided_class, class_count, class_length = get_divied_class(mask, height, width)
+    divided_class, class_boundary, class_count, class_length = get_divied_class(mask, height, width)
 
     # 가장 큰것 하나 고르기
     max_indx = [1]
@@ -74,7 +74,7 @@ def get_largest_part(mask, height, width, attach_ratio=0.15):
 
 def set_selected_class(divided_class, selected_class, height, width):
     '''
-    # Set True at selected class number. If else, set False.
+    Set True at selected class number. If else, set False.
     '''
     largest_part_mask = [[False for _ in range(0, width)] for _ in range(0, height)]
     for h in range(0, height):
@@ -110,7 +110,7 @@ def set_mask_class(mask, visited, divided_class, class_length, start_index, img_
         # 경계를 체크하기 위한 Flag
         zero_boundary = False
         for direction in range(0, 4):
-            if can_go(now[0], now[1], img_size[0], img_size[1], direction):
+            if can_go(now[0], now[1], img_size[0], img_size[1], direction=direction):
                 if mask[now[0] + dir_x[direction]][now[1] + dir_y[direction]]:
                     que.append((now[0] + dir_x[direction], now[1] + dir_y[direction]))
                 else:
@@ -120,15 +120,20 @@ def set_mask_class(mask, visited, divided_class, class_length, start_index, img_
             boundary_coordinate.append((now[0], now[1]))
     return count, boundary_coordinate
 
-def can_go(x, y, height, width, direction):
+def can_go(x, y, height, width, direction=None, x_diff=False, y_diff=False):
     '''
     주어진 범위 밖으로 나가는지 체크
     x , y : 시작 좌표
     height, width : 세로와 가로 길이
     direction : 방향 index of [동, 서, 남, 북]
+    x_diff, y_diff : 만약 특정 길이만큼 이동시, 범위 밖인지 체크하고 싶을 때.
     '''
-    x_check = x + dir_x[direction] > -1 and x + dir_x[direction] < height
-    y_check = y + dir_y[direction] > -1 and y + dir_y[direction] < width
+    if direction == None:        
+        x_check = x + x_diff > -1 and x + x_diff < height
+        y_check = y + y_diff > -1 and y + y_diff < width
+    else:
+        x_check = x + dir_x[direction] > -1 and x + dir_x[direction] < height
+        y_check = y + dir_y[direction] > -1 and y + dir_y[direction] < width
     return x_check and y_check
 
 def get_divied_class(mask, height, width):
@@ -157,7 +162,25 @@ def get_divied_class(mask, height, width):
                 class_count.append(count)
                 class_boundary.append(boundary_coordinate)
     
-    return divided_class, class_count, class_length
+    return divided_class, class_boundary, class_count, class_length
+
+def add_n_pixel_mask(divided_class, selected_class, boundary, height, width, n=10):
+    '''
+    경계를 돌면서 n 픽셀 거리 안에 있는 것들을 현재 Class에 포함시키는 함수.
+    '''
+    for b in boundary:
+        select_outside_pixel(divided_class, selected_class, height, width, b[0], b[1], n)
+
+def select_outside_pixel(divided_class, selected_class, height, width, x, y, n):
+    # 주어진 경계에 대해서 만약 거리 안에 있다면 그 class로 변환.
+    for x_diff in range(-1*n, n+1, 1):
+        for y_diff in range(-1*n, n+1, 1):
+            if can_go(x, y, height, width, x_diff=x_diff, y_diff=y_diff):
+                if get_pixel_distance(x, y, x + x_diff, y + y_diff) <= n:
+                    divided_class[x + x_diff][y + y_diff] = selected_class
+
+def get_pixel_distance(now_x, now_y, dest_x, dest_y):
+    return abs(now_x - dest_x) + abs(now_y - dest_y)
 
 def print_list_sparse(li, height, width, density=7):
     '''
@@ -196,5 +219,4 @@ if __name__ == "__main__":
     for i in range(0, instance_number):
         mask = get_largest_part(masks[i], height, width)
         get_only_instance_image(args_list[FILE_NAME], mask, height, width)
-    
     
