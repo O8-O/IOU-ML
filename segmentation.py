@@ -91,24 +91,42 @@ def set_mask_class(mask, visited, divided_class, class_length, start_index, img_
     '''
     count = 1
     que = [(start_index[0], start_index[1])]
+    boundary_coordinate = []
+
+    # BFS로 Mask 처리하기.
     while que:
         now = que[0]
         del que[0]
         # 방문한 곳은 방문하지 않음.
         if visited[now[0]][now[1]]:
             continue
-
+        
+        # Class Dividing 처리.
         visited[now[0]][now[1]] = True
         if mask[now[0]][now[1]]:
             divided_class[now[0]][now[1]] = class_length
             count += 1
+        
+        # 경계를 체크하기 위한 Flag
+        zero_boundary = False
         for direction in range(0, 4):
-            if can_go(now[0], now[1], img_size[0], img_size[1], direction) and mask[now[0] + dir_x[direction]][now[1] + dir_y[direction]]:
-                que.append((now[0] + dir_x[direction], now[1] + dir_y[direction]))
-    return count
+            if can_go(now[0], now[1], img_size[0], img_size[1], direction):
+                if mask[now[0] + dir_x[direction]][now[1] + dir_y[direction]]:
+                    que.append((now[0] + dir_x[direction], now[1] + dir_y[direction]))
+                else:
+                    # 근처에 0 Class ( 아무것도 없는 공간 == mask[x][y] 가 Flase ) 가 있다면, 경계선이다.
+                    zero_boundary = True
+        if zero_boundary:
+            boundary_coordinate.append((now[0], now[1]))
+    return count, boundary_coordinate
 
 def can_go(x, y, height, width, direction):
-    # 주어진 범위 밖으로 나가는지 체크
+    '''
+    주어진 범위 밖으로 나가는지 체크
+    x , y : 시작 좌표
+    height, width : 세로와 가로 길이
+    direction : 방향 index of [동, 서, 남, 북]
+    '''
     x_check = x + dir_x[direction] > -1 and x + dir_x[direction] < height
     y_check = y + dir_y[direction] > -1 and y + dir_y[direction] < width
     return x_check and y_check
@@ -124,6 +142,7 @@ def get_divied_class(mask, height, width):
     # Initializing.
     divided_class = [[0 for _ in range(0, width)] for _ in range(0, height)]
     visited = [[False for _ in range(0, width)] for _ in range(0, height)]
+    class_boundary = []
     class_count = []
     class_length = 0
 
@@ -134,8 +153,9 @@ def get_divied_class(mask, height, width):
             if mask[h][w]:
                 # BFS로 True로 되어있는 부분을 탐색.
                 class_length += 1
-                count = set_mask_class(mask, visited, divided_class, class_length, (h, w), (height, width))
+                count, boundary_coordinate = set_mask_class(mask, visited, divided_class, class_length, (h, w), (height, width))
                 class_count.append(count)
+                class_boundary.append(boundary_coordinate)
     
     return divided_class, class_count, class_length
 
