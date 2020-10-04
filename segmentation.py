@@ -515,6 +515,76 @@ def show_with_plt(imgs):
 
 	plt.show()
 
+def get_image_into_divided_plate(tf_map, width, height):
+	'''
+		tf_map : 경계선이 True로, 나머진 False로 구분되어있는 tf_map.
+		return
+			divided_class : 0 ~ N list_2D. 각각은 아무것도 없으면 0, 아니면 각 class number.
+			class_count : 각 class들의 숫자.
+			class_length : class의 갯수
+	'''
+	# Initializing.
+	divided_class = [[0 for _ in range(0, width)] for _ in range(0, height)]
+	visited = [[False for _ in range(0, width)] for _ in range(0, height)]
+	class_total = []
+	class_boundary = []
+	class_count = []
+	class_length = 0
+
+	for h in range(0, height):
+		for w in range(0, width):
+			if visited[h][w]:
+				continue
+			if tf_map[h][w] == False:
+				# BFS로 False 되어있는 부분을 탐색. True 되어있는 부분은 넘어가지 않는다.
+				class_length += 1
+				count, total_list, boundary_coordinate = set_tf_map_class(tf_map, visited, divided_class, class_length, (w, h), (width, height))
+				class_count.append(count)
+				class_total.append(total_list)
+				class_boundary.append(boundary_coordinate)
+	
+	return divided_class, class_total, class_boundary, class_count, class_length
+
+def set_tf_map_class(tf_map, visited, divided_class, class_length, start_index, img_size):
+	'''
+	mask[h][w] 에서 시작해서 연결된 모든 곳의 좌표에 divided_class list에다가 class_length 값을 대입해 놓는다.
+	그 class 의 갯수를 return
+	'''
+	count = 1
+	que = [start_index]
+	boundary_coordinate = []
+	total_list = []
+
+	# BFS로 tf_map 처리하기.
+	while que:
+		now = que[0]
+		del que[0]
+		# 방문한 곳은 방문하지 않음.
+		if visited[now[1]][now[0]]:
+			continue
+		
+		# Class Dividing 처리.
+		visited[now[1]][now[0]] = True
+		# False 인 부분만 입력.
+		if not tf_map[now[1]][now[0]]:
+			total_list.append((now[0], now[1]))
+			divided_class[now[1]][now[0]] = class_length
+			count += 1
+		
+		# 경계를 체크하기 위한 Flag
+		zero_boundary = False
+		for direction in range(0, 4):
+			if can_go(now[0], now[1], img_size[0], img_size[1], direction=direction):
+				# tf_map 의 False 인 부분만 찾아서 Plane 화 해야한다.
+				if not tf_map[now[1] + dir_y[direction]][now[0] + dir_x[direction]]:
+					que.append((now[0] + dir_x[direction], now[1] + dir_y[direction]))
+				else:
+					# 근처에 tf_map[x][y] 가 True 인 것이 있다면, 경계선이다.
+					zero_boundary = True
+		if zero_boundary:
+			boundary_coordinate.append((now[0], now[1]))
+	return count, total_list, boundary_coordinate
+
 if __name__ == "__main__":
 	mp.set_start_method("spawn", force=True)
 	args_list = [
@@ -561,6 +631,7 @@ if __name__ == "__main__":
 			for b in border_point:
 				connect_nearest_point(tf_map, b, width, height, nc)
 		tf_image = tf_map_to_image(tf_map, width, height)
-		
+		divided_class, class_total, class_boundary, class_count, class_length = get_image_into_divided_plate(tf_map, width, height)
+
 		coord_image = coord_to_image(noncycle_list, width, height)
 		show_with_plt([coord_image, tf_image])
