@@ -30,7 +30,7 @@ def setup_cfg(args):
 	cfg.freeze()
 	return cfg
 
-def get_only_instance_image(input_file, masks, height, width, output_file=None):
+def get_only_instance_image(input_file, masks, height, width, output_file=None, show=False):
 	'''
 	input_file  : string, 파일 이름
 	masks       : 2차원 list, width / height 크기, True 면 그 자리에 객체가 있는것, 아니면 없음.
@@ -47,11 +47,12 @@ def get_only_instance_image(input_file, masks, height, width, output_file=None):
 		for w in range(0, width):
 				for c in range(0, 3):
 					masked_image[h][w][c] = (original[h][w][c] if masks[h][w] else 0)
-	
-	cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
-	cv2.imshow(WINDOW_NAME, masked_image)
-	if cv2.waitKey(0) == 27:
-		visualized_output.save(output_file)
+	if show:
+		cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+		cv2.imshow(WINDOW_NAME, masked_image)
+		if cv2.waitKey(0) == 27:
+			visualized_output.save(output_file)
+	return masked_image
 
 def get_largest_part(mask, height, width, attach_ratio=0.15):
 	'''
@@ -272,11 +273,11 @@ def make_tf_map(coords, width, height):
 		for c in coord:
 			tf_map[c[1]][c[0]] = True
 	for x in range(width):
-		tf_map[0][x] = 75
-		tf_map[-1][x] = 75
+		tf_map[0][x] = True
+		tf_map[-1][x] = True
 	for y in range(height):
-		tf_map[y][0] = 75
-		tf_map[y][-1] = 75
+		tf_map[y][0] = True
+		tf_map[y][-1] = True
 	return tf_map
 
 def find_border_k_tf_map(tf_map, coord, width, height, n=5, k=4, hard_check=False):
@@ -388,7 +389,7 @@ def find_nearest_point(tf_map, point, width, height, before, n=5):
 	# tf_map에 가까운 곳이 n 거리 이내에 있는가?
 	for x in range(search_start_x, search_end_x):
 		for y in range(search_start_y, search_end_y):
-			if tf_map[y][x] == True or tf_map[y][x] == 75:
+			if tf_map[y][x] == True:
 				length = get_euclidean_distance(point, (x, y))
 				if (x, y) not in before and length < n:
 					if nearest_length > length:
@@ -482,9 +483,7 @@ def tf_map_to_image(tf_map, width, height):
 	tf_image = [[0 for _ in range(0, width)] for _ in range(0, height)]
 	for h in range(height):
 		for w in range(width):
-			if tf_map[h][w] == 75:
-				tf_image[h][w] = 75
-			elif tf_map[h][w]:
+			if tf_map[h][w]:
 				tf_image[h][w] = 255
 	tf_image = np.array(tf_image, np.uint8)
 	return tf_image
@@ -541,31 +540,27 @@ if __name__ == "__main__":
 	
 	for i in range(0, instance_number):
 		mask = get_largest_part(masks[i], height, width)
-		get_only_instance_image(args_list[FILE_NAME], mask, height, width)
+		masked_image = get_only_instance_image(args_list[FILE_NAME], mask, height, width)
+		# 잘린 이미지를 통해 외곽선을 얻어서 진행.
+		contours, heirarchy = get_contours(masked_image)
+		coords = contours_to_coord(contours)
+		coords = delete_line_threshold(coords, line_n=40)
+		cycle_list = []
+		noncycle_list = []
 
-	# frame = cv2.imread('Image/chair1.jpg')
-
-	# Using Contours function, search Contours.
-	contours, heirarchy = get_contours(frame)
-	coords = contours_to_coord(contours)
-	coords = delete_line_threshold(coords, line_n=40)
-	cycle_list = []
-	noncycle_list = []
-
-	for c in coords:
-		cycled, noncycled = divide_cycle(c)
-		if len(cycled) != 0:
-			cycle_list += cycled
-		if len(noncycled) != 0:
-			noncycle_list += noncycled
-	
-	tf_map = make_tf_map(noncycle_list, width, height)
-	for nc in noncycle_list:
-		border_point = find_border_k_tf_map(tf_map, nc, width, height, n=5, k=2, hard_check=False)
-		for b in border_point:
-			tf_map[b[1]][b[0]] = 75
-			connect_nearest_point(tf_map, b, width, height, nc)
-	tf_image = tf_map_to_image(tf_map, width, height)
-	
-	coord_image = coord_to_image(noncycle_list, width, height)
-	show_with_plt([coord_image, tf_image])
+		for c in coords:
+			cycled, noncycled = divide_cycle(c)
+			if len(cycled) != 0:
+				cycle_list += cycled
+			if len(noncycled) != 0:
+				noncycle_list += noncycled
+		
+		tf_map = make_tf_map(noncycle_list, width, height)
+		for nc in noncycle_list:
+			border_point = find_border_k_tf_map(tf_map, nc, width, height, n=5, k=2, hard_check=False)
+			for b in border_point:
+				connect_nearest_point(tf_map, b, width, height, nc)
+		tf_image = tf_map_to_image(tf_map, width, height)
+		
+		coord_image = coord_to_image(noncycle_list, width, height)
+		show_with_plt([coord_image, tf_image])
