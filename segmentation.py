@@ -42,17 +42,23 @@ def get_only_instance_image(input_file, masks, height, width, output_file=None, 
 		output_file = input_file.split(".")[0] + "_masked" + input_file.split(".")[1]
 	original = cv2.imread(input_file)
 	masked_image = np.zeros([height, width ,3], dtype=np.uint8)
+	mask_num = 0
 
 	for h in range(0, height):
 		for w in range(0, width):
 				for c in range(0, 3):
 					masked_image[h][w][c] = (original[h][w][c] if masks[h][w] else 0)
-	if show:
-		cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
-		cv2.imshow(WINDOW_NAME, masked_image)
-		if cv2.waitKey(0) == 27:
-			visualized_output.save(output_file)
-	return masked_image
+					if mask[h][w]:
+						mask_num += 1
+
+	return masked_image, mask_num
+
+def print_image(image, output_file=None):
+	cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+	cv2.imshow(WINDOW_NAME, image)
+	if cv2.waitKey(0) == 27:
+		visualized_output.save(output_file)
+	
 
 def get_largest_part(mask, height, width, attach_ratio=0.15):
 	'''
@@ -585,6 +591,79 @@ def set_tf_map_class(tf_map, visited, divided_class, class_length, start_index, 
 			boundary_coordinate.append((now[0], now[1]))
 	return count, total_list, boundary_coordinate
 
+def get_average_color(image, total_class, tc_num):
+	aver_r = 0
+	aver_g = 0
+	aver_b = 0
+
+	for coord in total_class:
+		rgb = image[coord[1]][coord[0]]
+		aver_r += rgb[0]
+		aver_g += rgb[1]
+		aver_b += rgb[2]
+	
+	return [int(aver_r/tc_num), int(aver_g/tc_num), int(aver_b/tc_num)]
+
+def get_around_pixel(divided_class, width, height, w, h):
+	# 8 방위 중에서 가장 많은 Class Number를 가져온다. 0이 가장 많아도 그냥 0으로 가져온다.
+	class_kind = []
+	class_number = []
+	for diff in [(0, -1), (0, 1), (1, -1), (1, 0), (1, 1), (-1, -1), (-1, 0), (-1, 1)]:
+		if can_go(h, w, height, width, x_diff=diff[0], y_diff=diff[1]):
+			if divided_class[h + diff[0]][w + diff[1]] in class_kind:
+				class_number[class_kind.index(divided_class[h + diff[0]][w + diff[1]])] += 1
+			else:
+				class_kind.append(divided_class[h + diff[0]][w + diff[1]])
+				class_number.append(0)
+	
+	largest_index = 0
+	for i in range(len(class_kind)):
+		if class_number[i] > class_number[largest_index]:
+			largest_index = i
+		elif class_number[i] == class_number[largest_index]:
+			if class_kind[i] > class_number[largest_index]:
+				largest_index = i
+	
+	return class_kind[largest_index]
+
+def contours_to_divided_class(divided_class, class_total, class_count, width, height):
+	# divided_class 내부에 있는 0 class들을 근처의 다른 Class로 설정한다.
+	doing_queue = []
+	for h in range(height):
+		for w in range(width):
+			# 만약 경계선이라면
+			if divided_class[h][w] == 0:
+				doing_queue.append((w, h))
+	
+	do_time = len(doing_queue) * 3
+	while len(doing_queue) != 0:
+		do_time -= 1
+		now = doing_queue[0]
+		del doing_queue[0]
+		now_class = get_around_pixel(divided_class, width, height, now[0], now[1])
+		if now_class != 0:
+			class_total[now_class - 1].append(now)
+			class_count[now_class - 1] += 1
+			divided_class[now[1]][now[0]] = now_class
+		else:
+			doing_queue.append(now)
+		print(do_time)
+		if do_time < 0:
+			break
+	if len(doing_queue) != 0:
+		class_total.insert(0, doing_queue)
+		class_count.insert(0, len(doing_queue))
+	
+def divided_class_into_image(divided_class, class_color, width, height):
+	mosiac_image = np.zeros([height, width ,3], dtype=np.uint8)
+	for h in range(height):
+		for w in range(width):
+			if divided_class[h][w] == 0:
+				mosiac_image[h][w] = [255, 255, 255]
+			else:
+				mosiac_image[h][w] = class_color[divided_class[h][w] - 1]
+	return mosiac_image
+
 if __name__ == "__main__":
 	mp.set_start_method("spawn", force=True)
 	args_list = [
@@ -607,31 +686,51 @@ if __name__ == "__main__":
 	masks = masks.tolist()  # masks 는 TF value의 tensor 값들
 	(height, width) = predictions['instances'].image_size
 	instance_number = len(predictions['instances'])
-	
+
+	# Mask 칠한 이미지 중에서 가장 큰것만 가지고 진행함.
+	largest_mask = []
+	largest_mask_number = -1
+
 	for i in range(0, instance_number):
 		mask = get_largest_part(masks[i], height, width)
-		masked_image = get_only_instance_image(args_list[FILE_NAME], mask, height, width)
-		# 잘린 이미지를 통해 외곽선을 얻어서 진행.
-		contours, heirarchy = get_contours(masked_image)
-		coords = contours_to_coord(contours)
-		coords = delete_line_threshold(coords, line_n=40)
-		cycle_list = []
-		noncycle_list = []
-
-		for c in coords:
-			cycled, noncycled = divide_cycle(c)
-			if len(cycled) != 0:
-				cycle_list += cycled
-			if len(noncycled) != 0:
-				noncycle_list += noncycled
+		masked_image, mask_num = get_only_instance_image(args_list[FILE_NAME], mask, height, width)
+		if mask_num > largest_mask_number:
+			largest_mask = masked_image
+			largest_mask_number = mask_num
 		
-		tf_map = make_tf_map(noncycle_list, width, height)
-		for nc in noncycle_list:
-			border_point = find_border_k_tf_map(tf_map, nc, width, height, n=5, k=2, hard_check=False)
-			for b in border_point:
-				connect_nearest_point(tf_map, b, width, height, nc)
-		tf_image = tf_map_to_image(tf_map, width, height)
-		divided_class, class_total, class_boundary, class_count, class_length = get_image_into_divided_plate(tf_map, width, height)
+	# 잘린 이미지를 통해 외곽선을 얻어서 진행.
+	contours, heirarchy = get_contours(largest_mask)
+	coords = contours_to_coord(contours)
+	coords = delete_line_threshold(coords, line_n=40)
+	cycle_list = []
+	noncycle_list = []
 
-		coord_image = coord_to_image(noncycle_list, width, height)
-		show_with_plt([coord_image, tf_image])
+	for c in coords:
+		cycled, noncycled = divide_cycle(c)
+		if len(cycled) != 0:
+			cycle_list += cycled
+		if len(noncycled) != 0:
+			noncycle_list += noncycled
+	
+	# 잘린 외곽선들을 True-False List로 바꿔서 각각 가장 가까운 곳에 연결.
+	tf_map = make_tf_map(noncycle_list, width, height)
+	for nc in noncycle_list:
+		# 가장자리가 될 포인트를 잡는다.
+		border_point = find_border_k_tf_map(tf_map, nc, width, height, n=5, k=2, hard_check=False)
+		for b in border_point:
+			# 가장자리에서 가장 가까운 외곽선으로 연결한다.
+			connect_nearest_point(tf_map, b, width, height, nc)
+	
+	# 나누어진 면적들을 DFS로 각각 가져온다.
+	divided_class, class_total, _, class_count, class_length = get_image_into_divided_plate(tf_map, width, height)
+	# 또한 나눈 선들도 각 면적에 포함시켜 나눈다.
+	contours_to_divided_class(divided_class, class_total, class_count, width, height)
+	class_color = []
+	for i in range(class_length):
+		class_color.append(get_average_color(largest_mask, class_total[i], class_count[i]))
+	dc_image = divided_class_into_image(divided_class, class_color, width, height)
+	print_image(dc_image)
+
+	# tf_image = tf_map_to_image(tf_map, width, height)
+	# coord_image = coord_to_image(noncycle_list, width, height)
+	# show_with_plt([coord_image, tf_image])
