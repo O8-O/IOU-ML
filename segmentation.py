@@ -215,9 +215,6 @@ def get_contours(frame, start=190, diff=30):
 	# Converting the image to grayscale.
 	gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-	# Smoothing without removing edges.
-	gray_filtered = cv2.bilateralFilter(gray, 7, 50, 50)
-
 	# Histogram Normalization
 	gray_CLAHE = cv2.createCLAHE(clipLimit=16.0, tileGridSize=(16, 16)).apply(gray)
 	gray_filtered = cv2.bilateralFilter(gray_CLAHE, 7, 50, 50)
@@ -604,18 +601,26 @@ def get_average_color(image, total_class, tc_num):
 	
 	return [int(aver_r/tc_num), int(aver_g/tc_num), int(aver_b/tc_num)]
 
-def get_around_pixel(divided_class, width, height, w, h):
-	# 8 방위 중에서 가장 많은 Class Number를 가져온다. 0이 가장 많아도 그냥 0으로 가져온다.
+def get_around_pixel_list(divided_class, width, height, w, h):
 	class_kind = []
 	class_number = []
+	class_coord = []
 	for diff in [(0, -1), (0, 1), (1, -1), (1, 0), (1, 1), (-1, -1), (-1, 0), (-1, 1)]:
 		if can_go(h, w, height, width, x_diff=diff[0], y_diff=diff[1]):
 			if divided_class[h + diff[0]][w + diff[1]] in class_kind:
 				class_number[class_kind.index(divided_class[h + diff[0]][w + diff[1]])] += 1
+				class_coord[class_kind.index(divided_class[h + diff[0]][w + diff[1]])].append((w + diff[1], h + diff[0]))
 			else:
 				class_kind.append(divided_class[h + diff[0]][w + diff[1]])
 				class_number.append(0)
+				class_coord.append([(w + diff[1], h + diff[0])])
+	return class_kind, class_number, class_coord
+
+def get_around_pixel(divided_class, width, height, w, h):
+	# 8 방위 중에서 가장 많은 Class Number를 가져온다. 0이 가장 많아도 그냥 0으로 가져온다.
+	class_kind, class_number, _ = get_around_pixel_list(divided_class, width, height, w, h)
 	
+	# 가장 많은 것을 가져와서 Return.
 	largest_index = 0
 	for i in range(len(class_kind)):
 		if class_number[i] > class_number[largest_index]:
@@ -626,13 +631,13 @@ def get_around_pixel(divided_class, width, height, w, h):
 	
 	return class_kind[largest_index]
 
-def contours_to_divided_class(divided_class, class_total, class_count, width, height):
+def contours_to_divided_class(tf_map, divided_class, class_total, class_border, class_count, width, height):
 	# divided_class 내부에 있는 0 class들을 근처의 다른 Class로 설정한다.
 	doing_queue = []
 	for h in range(height):
 		for w in range(width):
 			# 만약 경계선이라면
-			if divided_class[h][w] == 0:
+			if tf_map[h][w] == True:
 				doing_queue.append((w, h))
 	
 	do_time = len(doing_queue) * 3
@@ -643,26 +648,154 @@ def contours_to_divided_class(divided_class, class_total, class_count, width, he
 		now_class = get_around_pixel(divided_class, width, height, now[0], now[1])
 		if now_class != 0:
 			class_total[now_class - 1].append(now)
+			class_border[now_class - 1].append(now)
 			class_count[now_class - 1] += 1
 			divided_class[now[1]][now[0]] = now_class
 		else:
 			doing_queue.append(now)
-		print(do_time)
 		if do_time < 0:
 			break
-	if len(doing_queue) != 0:
-		class_total.insert(0, doing_queue)
-		class_count.insert(0, len(doing_queue))
 	
-def divided_class_into_image(divided_class, class_color, width, height):
+def divided_class_into_image(divided_class, class_number, class_color, width, height):
 	mosiac_image = np.zeros([height, width ,3], dtype=np.uint8)
 	for h in range(height):
 		for w in range(width):
 			if divided_class[h][w] == 0:
 				mosiac_image[h][w] = [255, 255, 255]
 			else:
-				mosiac_image[h][w] = class_color[divided_class[h][w] - 1]
+				mosiac_image[h][w] = class_color[class_number.index(divided_class[h][w])]
 	return mosiac_image
+
+def get_around_largest_area(divided_class, width, height, class_border, my_class):
+	'''
+	근처의 영역 중에 가장 많이 자신과 붙어있는 영역의 Class Number를 Return.
+	'''
+	total_kind = []
+	total_number = []
+	total_coord = []
+
+	for coord in class_border:
+		class_kind, class_number, class_coord = get_around_pixel_list(divided_class, width, height, coord[0], coord[1])
+		# 모든 Return 값에 대해서
+		for ck in class_kind:
+			# 이미 있던거면 class coord 가 있던건지 체크해서 입력
+			if ck in total_kind:
+				ck_index = total_kind.index(ck)
+				for cc in class_coord[class_kind.index(ck)]:
+					# 모든 coord return 값에 대해서 없는것만 추가하고 숫자를 늘림.
+					if cc not in total_coord[ck_index]:
+						total_number[ck_index] += 1
+						total_coord[ck_index].append(cc)
+			else:
+				# 처음 나온 Class 면 추가한다.
+				ck_index = class_kind.index(ck)
+				total_kind.append(ck)
+				total_number.append(class_number[ck_index])
+				total_coord.append(class_coord[ck_index])
+
+	largest_number = -1
+	largest_index = -1
+	for i in range(len(total_number)):
+		# 자신이 아닌 가장 큰 Class를 뽑아온다.
+		if total_number[i] > largest_number and total_kind[i] != my_class:
+			largest_number = total_number[i]
+			largest_index = i
+	
+	if largest_number == -1:
+		return -1
+	return total_kind[largest_index]
+
+def merge_small_size(divided_class, class_number, class_total, class_border, class_count, width, height, min_value=200):
+	'''
+	일정 크기 이하의 영역들을 하나로 합치기 위한 함수.
+	divided_class : 2D List for image class.
+	class_number : 각 Class들의 numbering set.
+	Class_total ~ Class Count : 다른것들과 동일
+	min_value : 이 숫자보다 작은 크기의 영역들은 근처의 다른 곳에 합쳐지게 된다.
+	'''
+	indx = get_small_class(class_count, min_value)
+	while indx != -1:
+		large_class_number = get_around_largest_area(divided_class, width, height, class_border[indx], class_number[indx])
+		if large_class_number < 0:
+			break
+		elif large_class_number == 0:
+			# Set into 0 Class
+			set_area(divided_class, class_total[indx], 0)
+			del class_number[indx]
+			del class_total[indx]
+			del class_border[indx]
+			del class_count[indx]
+		else:
+			# Not in 0 class.
+			merging_list = [class_number.index(large_class_number), indx]
+			class_number, class_total, class_border, class_count, _ = \
+				merge_divided_group(divided_class, class_number, class_total, class_border, class_count, merging_list, width, height)
+			indx = get_small_class(class_count, min_value)
+	
+	return class_number, class_total, class_border, class_count, len(class_number) 
+
+def get_small_class(class_count, n):
+	# Return first list index which is smaller then n.
+	# If there is no class smaller then n, return -1.
+	for i in range(len(class_count)):
+		if class_count[i] < n :
+			return i
+	return -1
+
+def set_area(divided_class, class_total, change_into):
+	for coord in class_total:
+		divided_class[coord[1]][coord[0]] = change_into
+
+def is_border(divided_class, coord, width, height):
+	# Check if given coord is outside of area.
+	neighbor_list = []
+	for direction in range(4):
+		if can_go(coord[0], coord[1], width, height, direction=direction):
+			neighbor = divided_class[coord[1] + dir_y[direction]][coord[0] + dir_x[direction]]
+			if neighbor not in neighbor_list:
+				neighbor_list.append(neighbor)
+	return len(neighbor_list) > 1
+				
+def check_border(divided_class, class_border, width, height):
+	# Get only class border coordination.
+	ret_class_border = []
+	for coord in class_border:
+		if is_border(divided_class, coord, width, height):
+			ret_class_border.append(coord)
+	return ret_class_border
+
+def merge_divided_group(divided_class, class_numbers, class_total, class_border, class_count, merge_group_index, width, height):
+	'''
+	merge_group_index에 적힌 class들을 하나의 class로 결합한다.
+	divided_class : 2D List // 각 Class 숫자들이 적혀있음. 
+		- 함수 진행 뒤 변경됨.
+	class_numbers : 각 index에서의 class 숫자들. 처음에는 1 ~ N 이지만, 합쳐지면서 바뀔 수 있다.
+	dividec_class ~ class_count : 다른것과 동일.
+	merge_group_index : divided_class에서 서로 하나로 합칠 그룹의 index 들. 대표가 될 가장 큰 Group이 [0]이다.
+	'''
+	class_num = len(class_total)
+	ret_class_numbers = []
+	ret_class_total = []
+	ret_class_border = []
+	ret_class_count = []
+	merge_base_index = merge_group_index[0]
+
+	for i in range(class_num):
+		if not(i in merge_group_index and i != merge_base_index):
+			ret_class_numbers.append(class_numbers[i])
+			ret_class_total.append(class_total[i])
+			ret_class_border.append(class_border[i])
+			ret_class_count.append(class_count[i])
+	for i in range(class_num):
+		if i in merge_group_index and i != merge_base_index:
+			ret_class_total[merge_base_index] += class_total[i]
+			ret_class_border[merge_base_index] += class_border[i]
+			ret_class_count[merge_base_index] += class_count[i]
+
+	set_area(divided_class, ret_class_total[merge_base_index], ret_class_numbers[merge_base_index])
+	ret_class_border[merge_base_index] = check_border(divided_class, ret_class_border[merge_base_index], width, height)
+
+	return ret_class_numbers, ret_class_total, ret_class_border, ret_class_count, len(class_total), 
 
 if __name__ == "__main__":
 	mp.set_start_method("spawn", force=True)
@@ -686,7 +819,6 @@ if __name__ == "__main__":
 	masks = masks.tolist()  # masks 는 TF value의 tensor 값들
 	(height, width) = predictions['instances'].image_size
 	instance_number = len(predictions['instances'])
-
 	# Mask 칠한 이미지 중에서 가장 큰것만 가지고 진행함.
 	largest_mask = []
 	largest_mask_number = -1
@@ -721,14 +853,20 @@ if __name__ == "__main__":
 			# 가장자리에서 가장 가까운 외곽선으로 연결한다.
 			connect_nearest_point(tf_map, b, width, height, nc)
 	
-	# 나누어진 면적들을 DFS로 각각 가져온다.
-	divided_class, class_total, _, class_count, class_length = get_image_into_divided_plate(tf_map, width, height)
+	# 나누어진 면적들을 DFS로 각각 가져온다. tf_map 은 true false 에서 숫자가 써있는 Map 이 된다.
+	divided_class, class_total, class_border, class_count, class_length = get_image_into_divided_plate(tf_map, width, height)
 	# 또한 나눈 선들도 각 면적에 포함시켜 나눈다.
-	contours_to_divided_class(divided_class, class_total, class_count, width, height)
+	contours_to_divided_class(tf_map, divided_class, class_total, class_border, class_count, width, height)
+
+	# 일정 크기보다 작은 면적들은 근처에 뭐가 제일 많은지 체크해서 통합시킨다.
+	class_number, class_total, class_border, class_count, class_length = \
+	merge_small_size(divided_class, range(1, class_length + 1), class_total, class_border, class_count, width, height, min_value=50)
+
 	class_color = []
 	for i in range(class_length):
 		class_color.append(get_average_color(largest_mask, class_total[i], class_count[i]))
-	dc_image = divided_class_into_image(divided_class, class_color, width, height)
+	
+	dc_image = divided_class_into_image(divided_class, class_number, class_color, width, height)
 	print_image(dc_image)
 
 	# tf_image = tf_map_to_image(tf_map, width, height)
