@@ -656,12 +656,12 @@ def contours_to_divided_class(tf_map, divided_class, class_total, class_border, 
 		if do_time < 0:
 			break
 	
-def divided_class_into_image(divided_class, class_number, class_color, width, height):
+def divided_class_into_image(divided_class, class_number, class_color, width, height, printing_class):
 	mosiac_image = np.zeros([height, width ,3], dtype=np.uint8)
 	for h in range(height):
 		for w in range(width):
-			if divided_class[h][w] == 0:
-				mosiac_image[h][w] = [255, 255, 255]
+			if divided_class[h][w] == 0 or divided_class[h][w] not in printing_class:
+				mosiac_image[h][w] = [0, 0, 0]
 			else:
 				mosiac_image[h][w] = class_color[class_number.index(divided_class[h][w])]
 	return mosiac_image
@@ -866,7 +866,17 @@ if __name__ == "__main__":
 	for i in range(class_length):
 		class_color.append(get_average_color(largest_mask, class_total[i], class_count[i]))
 	
-	dc_image = divided_class_into_image(divided_class, class_number, class_color, width, height)
+	sorted_count = []
+	for i in range(class_length):
+		sorted_count.append((class_count[i], i))
+	
+	sorted_count.sort()
+	printing_class = []
+	# 133개중 10개 골라내는...
+	for i in range(-10, -1):
+		printing_class.append(class_number[sorted_count[i][1]])
+
+	dc_image = divided_class_into_image(divided_class, class_number, class_color, width, height, printing_class)
 	print_image(dc_image)
 
 	# tf_image = tf_map_to_image(tf_map, width, height)
