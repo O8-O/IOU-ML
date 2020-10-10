@@ -58,7 +58,6 @@ def print_image(image, output_file=None):
 	cv2.imshow(WINDOW_NAME, image)
 	if cv2.waitKey(0) == 27:
 		visualized_output.save(output_file)
-	
 
 def get_largest_part(mask, height, width, attach_ratio=0.15):
 	'''
@@ -666,6 +665,16 @@ def divided_class_into_image(divided_class, class_number, class_color, width, he
 				mosiac_image[h][w] = class_color[class_number.index(divided_class[h][w])]
 	return mosiac_image
 
+def divided_class_into_real_image(divided_class, real_image, width, height, printing_class):
+	crop_image = np.zeros([height, width ,3], dtype=np.uint8)
+	for h in range(height):
+		for w in range(width):
+			if divided_class[h][w] == 0 or divided_class[h][w] not in printing_class:
+				crop_image[h][w] = [0, 0, 0]
+			else:
+				crop_image[h][w] = real_image[h][w]
+	return crop_image
+
 def get_around_largest_area(divided_class, width, height, class_border, my_class):
 	'''
 	근처의 영역 중에 가장 많이 자신과 붙어있는 영역의 Class Number를 Return.
@@ -705,6 +714,21 @@ def get_around_largest_area(divided_class, width, height, class_border, my_class
 		return -1
 	return total_kind[largest_index]
 
+def merge_around(divided_class, class_number, class_total, class_border, class_count, merge_indx, width, height):
+	large_class_number = get_around_largest_area(divided_class, width, height, class_border[merge_indx], class_number[merge_indx])
+	if large_class_number == 0:
+		# Set into 0 Class
+		set_area(divided_class, class_total[merge_indx], 0)
+		del class_number[merge_indx]
+		del class_total[merge_indx]
+		del class_border[merge_indx]
+		del class_count[merge_indx]
+		return class_number, class_total, class_border, class_count, len(class_total)
+	else:
+		# Not in 0 class.
+		merging_list = [class_number.index(large_class_number), merge_indx]
+		return merge_divided_group(divided_class, class_number, class_total, class_border, class_count, merging_list, width, height)
+
 def merge_small_size(divided_class, class_number, class_total, class_border, class_count, width, height, min_value=200):
 	'''
 	일정 크기 이하의 영역들을 하나로 합치기 위한 함수.
@@ -715,22 +739,9 @@ def merge_small_size(divided_class, class_number, class_total, class_border, cla
 	'''
 	indx = get_small_class(class_count, min_value)
 	while indx != -1:
-		large_class_number = get_around_largest_area(divided_class, width, height, class_border[indx], class_number[indx])
-		if large_class_number < 0:
-			break
-		elif large_class_number == 0:
-			# Set into 0 Class
-			set_area(divided_class, class_total[indx], 0)
-			del class_number[indx]
-			del class_total[indx]
-			del class_border[indx]
-			del class_count[indx]
-		else:
-			# Not in 0 class.
-			merging_list = [class_number.index(large_class_number), indx]
-			class_number, class_total, class_border, class_count, _ = \
-				merge_divided_group(divided_class, class_number, class_total, class_border, class_count, merging_list, width, height)
-			indx = get_small_class(class_count, min_value)
+		class_number, class_total, class_border, class_count, _ = \
+			merge_around(divided_class, class_number, class_total, class_border, class_count, indx, width, height)
+		indx = get_small_class(class_count, min_value)
 	
 	return class_number, class_total, class_border, class_count, len(class_number) 
 
@@ -795,7 +806,89 @@ def merge_divided_group(divided_class, class_numbers, class_total, class_border,
 	set_area(divided_class, ret_class_total[merge_base_index], ret_class_numbers[merge_base_index])
 	ret_class_border[merge_base_index] = check_border(divided_class, ret_class_border[merge_base_index], width, height)
 
-	return ret_class_numbers, ret_class_total, ret_class_border, ret_class_count, len(class_total), 
+	return ret_class_numbers, ret_class_total, ret_class_border, ret_class_count, len(ret_class_total), 
+
+def get_class_color(image, class_total, class_count):
+	class_color = []
+	for i in range(len(class_total)):
+		class_color.append(get_average_color(image, class_total[i], class_count[i]))
+	return class_color
+
+def merge_same_color(divided_class, class_numbers, class_total, class_border, class_count, largest_mask, width, height, sim_score=180):
+	'''
+	유사도 sim_score 이내의 같은 plate들을 모아서 return.
+	'''
+	import utility
+	
+	same_flag = True
+	class_length = len(class_numbers)
+	ret_class_numbers = class_numbers
+	ret_class_total = class_total
+	ret_class_border = class_border
+	ret_class_count = class_count
+
+	while same_flag:
+		same_flag = False
+		# Make average class colors.
+		class_color = get_class_color(largest_mask, ret_class_total, ret_class_count)
+		color_map = utility.get_color_distance_map(class_color, class_length)
+		
+		merge_group_index = []
+		for i in range(class_length):
+			for j in range(i + 1, class_length):
+				if color_map[i][j] < sim_score:
+					if i not in merge_group_index:
+						merge_group_index.append(i)
+						same_flag = True
+					merge_group_index.append(j)
+			if same_flag:
+				break
+		if len(merge_group_index) == 0:
+			break
+		else:
+			for i in range(1, len(merge_group_index)):
+				del class_color[merge_group_index[i] - i + 1]
+		ret_class_numbers, ret_class_total, ret_class_border, ret_class_count, class_length = \
+			merge_divided_group(divided_class, ret_class_numbers, ret_class_total, ret_class_border, ret_class_count, merge_group_index, width, height)
+
+	# Make average class colors with last reamins.
+	class_color = get_class_color(largest_mask, ret_class_total, ret_class_count)
+	return ret_class_numbers, ret_class_total, ret_class_border, ret_class_count, class_length, class_color
+
+def delete_unavailable_color(divided_class, class_numbers, class_total, class_border, class_count, largest_mask, min_add_up=40):
+	class_length = len(class_numbers)
+	ret_class_numbers = []
+	ret_class_total = []
+	ret_class_border = []
+	ret_class_count = []
+	class_color = get_class_color(largest_mask, class_total, class_count)
+
+	zero_list = []
+	for i in range(class_length):
+		if class_color[i][0] + class_color[i][1] + class_color[i][2] < min_add_up:
+			zero_list.append(i)
+			continue
+		ret_class_numbers.append(class_numbers[i])
+		ret_class_total.append(class_total[i])
+		ret_class_border.append(class_border[i])
+		ret_class_count.append(class_count[i])
+
+	for z in range(len(zero_list)):	
+		set_area(divided_class, class_total[zero_list[z]], 0)
+
+	return ret_class_numbers, ret_class_total, ret_class_border, ret_class_count, len(ret_class_total)
+
+def calc_space_with_given_coord(class_number, class_total, given_coord):
+	ret_class_number = []
+
+	for coord in given_coord:
+		for cn in range(len(class_total)):
+			if coord in class_total[cn]:
+				if class_number[cn] not in ret_class_number:
+					ret_class_number.append(class_number[cn])
+				break
+
+	return ret_class_number
 
 if __name__ == "__main__":
 	mp.set_start_method("spawn", force=True)
@@ -861,23 +954,26 @@ if __name__ == "__main__":
 	# 일정 크기보다 작은 면적들은 근처에 뭐가 제일 많은지 체크해서 통합시킨다.
 	class_number, class_total, class_border, class_count, class_length = \
 	merge_small_size(divided_class, range(1, class_length + 1), class_total, class_border, class_count, width, height, min_value=50)
-
-	class_color = []
-	for i in range(class_length):
-		class_color.append(get_average_color(largest_mask, class_total[i], class_count[i]))
 	
-	sorted_count = []
-	for i in range(class_length):
-		sorted_count.append((class_count[i], i))
-	
-	sorted_count.sort()
-	printing_class = []
-	# 133개중 10개 골라내는...
-	for i in range(-10, -1):
-		printing_class.append(class_number[sorted_count[i][1]])
+	'''
+	# 이상한 색을 가진 것들을 지워버린다.
+	class_number, class_total, class_border, class_count, class_length = \
+	delete_unavailable_color(divided_class, class_number, class_total, class_border, class_count, largest_mask)
+	'''
 
-	dc_image = divided_class_into_image(divided_class, class_number, class_color, width, height, printing_class)
-	print_image(dc_image)
+	class_number, class_total, class_border, class_count, class_length, class_color = \
+	merge_same_color(divided_class, range(1, class_length + 1), class_total, class_border, class_count, largest_mask, width, height, sim_score=60)
+	
+	printing_class = calc_space_with_given_coord(class_number, class_total, \
+		[(529, 53), (386, 164), (503, 194), (324, 291), (246, 338), (167, 384), (45, 382), (65, 165), (441, 167), (312, 167), (492, 197), (414, 189), (329, 128), (510, 186), (479, 183), (46, 352), (242, 452), (362, 202), (326, 198)])
+	
+	dc_image = divided_class_into_image(divided_class, class_number, class_color, width, height, class_number)
+	dri_image = divided_class_into_real_image(divided_class, img, width, height, printing_class)
+
+	'''
+	dc_image = divided_class_into_image(divided_class, class_number, class_color, width, height, class_number)
+	'''
+	show_with_plt([dc_image, dri_image])
 
 	# tf_image = tf_map_to_image(tf_map, width, height)
 	# coord_image = coord_to_image(noncycle_list, width, height)
