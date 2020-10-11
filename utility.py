@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import sys
 
 dir_x = [0, 0, 1, -1]
 dir_y = [1, -1, 0, 0]
@@ -71,20 +72,20 @@ def print_list_sparse(li, height, width, density=7):
 			print(li[h][w], end=" ")
 		print()
 
-def can_go(x, y, height, width, direction=None, x_diff=False, y_diff=False):
+def can_go(x, y, width, height, direction=None, x_diff=False, y_diff=False):
 	'''
 	주어진 범위 밖으로 나가는지 체크
 	x , y : 시작 좌표
-	height, width : 세로와 가로 길이
+	width, height: 가로와 세로의 길이
 	direction : 방향 index of [동, 서, 남, 북]
 	x_diff, y_diff : 만약 특정 길이만큼 이동시, 범위 밖인지 체크하고 싶을 때.
 	'''
 	if direction == None:        
-		x_check = x + x_diff > -1 and x + x_diff < height
-		y_check = y + y_diff > -1 and y + y_diff < width
+		x_check = x + x_diff > -1 and x + x_diff < width
+		y_check = y + y_diff > -1 and y + y_diff < height
 	else:
-		x_check = x + dir_x[direction] > -1 and x + dir_x[direction] < height
-		y_check = y + dir_y[direction] > -1 and y + dir_y[direction] < width
+		x_check = x + dir_x[direction] > -1 and x + dir_x[direction] < width
+		y_check = y + dir_y[direction] > -1 and y + dir_y[direction] < height
 	return x_check and y_check
 
 def make_tf_map(coords, width, height):
@@ -176,6 +177,22 @@ def divided_class_into_real_image(divided_class, real_image, width, height, prin
 			else:
 				crop_image[h][w] = real_image[h][w]
 	return crop_image
+
+def calc_space_with_given_coord(class_number, class_total, given_coord):
+	'''
+	사용자가 입력한 좌표들로, 그 좌표가 우리가 가지고있는 class_total 좌표계 내에 존재할시. 그 class_number를 모아서 return 해 준다.
+	'''
+	ret_class_number = []
+
+	for coord in given_coord:
+		for cn in range(len(class_total)):
+			if coord in class_total[cn]:
+				if class_number[cn] not in ret_class_number:
+					ret_class_number.append(class_number[cn])
+				break
+
+	return ret_class_number
+
 
 if __name__ == "__main__":
 	p1 = [205, 203, 202] # #CDCBCA ( 의자 등받이 부분 )

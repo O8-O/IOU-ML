@@ -1,5 +1,3 @@
-import cv2
-import numpy as np
 import utility
 
 '''
@@ -13,31 +11,8 @@ Image 파일들은 전부 height - width 순서.
 좌표는 전부 (x, y) 순서. width 는 x, height 는 y임을 기억하자.
 '''
 
-def get_only_instance_image(input_file, mask, height, width, output_file=None, show=False):
-	'''
-	파일 이름을 입력받아서 실제로 masking 된 부분의 사진만 output 해 준다.
-	input_file	: string, 파일 이름
-	masks		: 2차원 list, width / height 크기, True 면 그 자리에 객체가 있는것, 아니면 없음.
-	width		: int, 너비
-	height		: int, 높이
-	output_file	: string, output_file 이름
-	'''
-	if output_file == None:
-		output_file = input_file.split(".")[0] + "_masked" + input_file.split(".")[1]
-	original = cv2.imread(input_file)
-	masked_image = np.zeros([height, width ,3], dtype=np.uint8)
-	mask_num = 0
-
-	for h in range(0, height):
-		for w in range(0, width):
-				for c in range(0, 3):
-					masked_image[h][w][c] = (original[h][w][c] if mask[h][w] else 0)
-					if mask[h][w]:
-						mask_num += 1
-
-	return masked_image, mask_num
-
-def set_selected_class(divided_class, selected_class, height, width):
+# 마스킹된 영역 처리하기
+def set_selected_class(divided_class, selected_class, width, height):
 	'''
 	divided_class 내부에 있는 selected_class list의 원소 class_number 들을 모두 true 로 바꿔준 tf_map을 return 해준다.
 	'''
@@ -49,28 +24,47 @@ def set_selected_class(divided_class, selected_class, height, width):
 
 	return largest_part_mask
 
-def add_n_pixel_mask(divided_class, selected_class, class_border, height, width, n=10):
+def add_n_pixel_mask(divided_class, selected_class, class_border, width, height, n=10):
 	'''
 	경계를 돌면서 n 픽셀 거리 안에 있는 것들을 현재 Class에 포함시키는 함수.
 	'''
 	for b in class_border:
-		select_outside_pixel(divided_class, selected_class, height, width, b[0], b[1], n)
+		select_outside_pixel(divided_class, selected_class, width, height, b[0], b[1], n)
 
-def select_outside_pixel(divided_class, selected_class, height, width, x, y, n):
+def select_outside_pixel(divided_class, selected_class, width, height, x, y, n):
 	# 주어진 경계에 대해서 만약 거리 안에 있다면 그 class로 변환.
 	for x_diff in range(-1*n, n+1, 1):
 		for y_diff in range(-1*n, n+1, 1):
-			if utility.can_go(x, y, height, width, x_diff=x_diff, y_diff=y_diff):
+			if utility.can_go(x, y, width, height, x_diff=x_diff, y_diff=y_diff):
 				if utility.get_pixel_distance((x, y), (x + x_diff, y + y_diff)) <= n:
-					divided_class[x + x_diff][y + y_diff] = selected_class
+					divided_class[y + y_diff][x + x_diff] = selected_class
+
+def set_area(divided_class, class_total, change_into):
+	for coord in class_total:
+		divided_class[coord[1]][coord[0]] = change_into
 
 def set_mask_class(mask, visited, divided_class, class_length, start_index, img_size):
 	'''
 	mask[h][w] 에서 시작해서 연결된 모든 곳의 좌표에 divided_class list에다가 class_length 값을 대입해 놓는다.
 	그 class 의 갯수를 return
 	'''
+	total_coord, boundary_coordinate, count = bfs(mask, visited, start_index, img_size)
+	set_area(divided_class, total_coord, class_length)
+	return count, boundary_coordinate
+
+def isTrue(val):
+	return val == True
+
+def isFalse(val):
+	return val == False
+
+def bfs(mask, visited, start_index, img_size, masking_function=isTrue):
+	'''
+	mask 되어있는 영역 내에서, divided_class 내부에서 연결된 모든 좌표의 coord와 경계의 coord를 return.
+	'''
 	count = 1
 	que = [(start_index[0], start_index[1])]
+	total_coord = []
 	boundary_coordinate = []
 
 	# BFS로 Mask 처리하기.
@@ -78,29 +72,31 @@ def set_mask_class(mask, visited, divided_class, class_length, start_index, img_
 		now = que[0]
 		del que[0]
 		# 방문한 곳은 방문하지 않음.
-		if visited[now[0]][now[1]]:
+		if visited[now[1]][now[0]]:
 			continue
 		
 		# Class Dividing 처리.
-		visited[now[0]][now[1]] = True
-		if mask[now[0]][now[1]]:
-			divided_class[now[0]][now[1]] = class_length
+		visited[now[1]][now[0]] = True
+		if masking_function(mask[now[1]][now[0]]):
+			total_coord.append(now)
 			count += 1
 		
 		# 경계를 체크하기 위한 Flag
 		zero_boundary = False
 		for direction in range(0, 4):
+			# 해당 방향으로 갈 수 있고, mask 가 칠해진 곳이라면, queue 에 집어넣는다.
 			if utility.can_go(now[0], now[1], img_size[0], img_size[1], direction=direction):
-				if mask[now[0] + utility.dir_x[direction]][now[1] + utility.dir_y[direction]]:
+				if masking_function(mask[now[1] + utility.dir_y[direction]][now[0] + utility.dir_x[direction]]):
 					que.append((now[0] + utility.dir_x[direction], now[1] + utility.dir_y[direction]))
 				else:
 					# 근처에 0 Class ( 아무것도 없는 공간 == mask[x][y] 가 Flase ) 가 있다면, 경계선이다.
 					zero_boundary = True
 		if zero_boundary:
-			boundary_coordinate.append((now[0], now[1]))
-	return count, boundary_coordinate
+			boundary_coordinate.append(now)
 
-def get_divied_class(mask, height, width):
+	return total_coord, boundary_coordinate, count
+    	
+def get_divided_class(mask, width, height):
 	'''
 		mask    : list_2D, True False 배열의 mask
 		return
@@ -115,26 +111,26 @@ def get_divied_class(mask, height, width):
 	class_count = []
 	class_length = 0
 
-	for h in range(0, height):
-		for w in range(0, width):
+	for h in range(height):
+		for w in range(width):
 			if visited[h][w]:
 				continue
 			if mask[h][w]:
 				# BFS로 True로 되어있는 부분을 탐색.
 				class_length += 1
-				count, boundary_coordinate = set_mask_class(mask, visited, divided_class, class_length, (h, w), (height, width))
+				count, boundary_coordinate = set_mask_class(mask, visited, divided_class, class_length, (w, h), (width, height))
 				class_count.append(count)
 				class_boundary.append(boundary_coordinate)
 	
 	return divided_class, class_boundary, class_count, class_length
 
-def get_largest_part(mask, height, width, attach_ratio=0.15):
+def get_largest_part(mask, width, height, attach_ratio=0.15):
 	'''
 		TODO	: attach_ration 이유 정하기
 		mask	: list_2D, True False 배열의 mask
 		mask의 가장 큰 True 부분을 찾고, 그 부분만 True이고, 나머지는 False로 Output 한다.
 	'''
-	divided_class, class_boundary, class_count, class_length = get_divied_class(mask, height, width)
+	divided_class, class_boundary, class_count, class_length = get_divided_class(mask, width, height)
 
 	# 가장 큰것 하나 고르기
 	max_indx = [1]
@@ -149,11 +145,77 @@ def get_largest_part(mask, height, width, attach_ratio=0.15):
 
 	# 근처에 있는 n 픽셀 거리 안에있는것도 모으기
 	for mi in max_indx:
-		add_n_pixel_mask(divided_class, mi, class_boundary[mi-1], height, width)
+		add_n_pixel_mask(divided_class, mi, class_boundary[mi-1], width, height)
 	
 	# 비슷한 것들을 모아서 하나의 Mask로 만들기.
-	return set_selected_class(divided_class, max_indx, height, width)
+	return set_selected_class(divided_class, max_indx, width, height)
 
+# divided image 만들기.
+def get_image_into_divided_plate(tf_map, width, height):
+	'''
+		tf_map : 경계선이 True로, 나머진 False로 구분되어있는 tf_map.
+		return
+			divided_class : 0 ~ N list_2D. 각각은 아무것도 없으면 0, 아니면 각 class number.
+			class_count : 각 class들의 숫자.
+			class_length : class의 갯수
+	'''
+	# Initializing.
+	divided_class = [[0 for _ in range(0, width)] for _ in range(0, height)]
+	visited = [[False for _ in range(0, width)] for _ in range(0, height)]
+	class_total = []
+	class_boundary = []
+	class_count = []
+	class_length = 0
+
+	for h in range(0, height):
+		for w in range(0, width):
+			if visited[h][w]:
+				continue
+			if tf_map[h][w] == False:
+				# BFS로 False 되어있는 부분을 탐색. True 되어있는 부분은 넘어가지 않는다.
+				class_length += 1
+				count, total_list, boundary_coordinate = set_tf_map_class(tf_map, visited, divided_class, class_length, (w, h), (width, height))
+				class_count.append(count)
+				class_total.append(total_list)
+				class_boundary.append(boundary_coordinate)
+	
+	return divided_class, class_total, class_boundary, class_count, class_length
+
+def set_tf_map_class(tf_map, visited, divided_class, class_length, start_index, img_size):
+	'''
+	mask[h][w] 에서 시작해서 연결된 모든 곳의 좌표에 divided_class list에다가 class_length 값을 대입해 놓는다.
+	그 class 의 갯수를 return
+	'''
+	total_coord, boundary_coordinate, count = bfs(tf_map, visited, start_index, img_size, masking_function=isFalse)
+	set_area(divided_class, total_coord, class_length)
+	return count, total_coord, boundary_coordinate
+
+def contours_to_divided_class(tf_map, divided_class, class_total, class_border, class_count, width, height):
+	# divided_class 내부에 있는 0 class들을 근처의 다른 Class로 설정한다.
+	doing_queue = []
+	for h in range(height):
+		for w in range(width):
+			# 만약 경계선이라면
+			if tf_map[h][w] == True:
+				doing_queue.append((w, h))
+	
+	do_time = len(doing_queue) * 3
+	while len(doing_queue) != 0:
+		do_time -= 1
+		now = doing_queue[0]
+		del doing_queue[0]
+		now_class = get_around_pixel(divided_class, width, height, now[0], now[1])
+		if now_class != 0:
+			class_total[now_class - 1].append(now)
+			class_border[now_class - 1].append(now)
+			class_count[now_class - 1] += 1
+			divided_class[now[1]][now[0]] = now_class
+		else:
+			doing_queue.append(now)
+		if do_time < 0:
+			break
+
+# 떨어져있는 점 연결하기.
 def connect_lines(tf_map, start_point, dest_point):
 	# 시작점과 목표 지점 사이에 직선을 긋는다.
 	start_x = start_point[0]
@@ -265,4 +327,205 @@ def find_nearest_point(tf_map, point, width, height, before, n=5):
 						nearest_length = length
 						nearest_point = (x, y)
 	return nearest_point
+
+# 좌표와 리스트 탐색
+def contours_to_coord(contours):
+	'''
+	입력받은 외곽선들을 좌표계로 바꾸어서 return 해 준다.
+	contours : 2D List. 각 원소들은 외곽선의 sequence 이다.
+	'''
+	coords = []
+	for cinstances in contours:
+		temp = []
+		for c in cinstances:
+				now = (c[0][0], c[0][1])
+				if now not in temp:
+					temp.append(now)
+		coords.append(temp)
+	return coords
+
+def delete_line_threshold(contours, line_n=40):
+	'''
+	입력받은 리스트 중, line_n 갯수를 넘지 않는 작은 line들은 지워준다.
+	'''
+	contour_len = list(map(len, contours))
+
+	ret_contours = []
+
+	for i in range(len(contours)):
+		if contour_len[i] > line_n:
+			ret_contours.append(contours[i])
+	return ret_contours
+
+# 외곽선 분해하기
+def divide_cycle(coords):
+	# Divide coords into cycle and noncycle list.
+	length = len(coords)
+	before = []
+	cycle_list = []
+	noncycle_list = []
+	indx = 0
+	while indx < length:
+		now = coords[indx]
+		if now not in before:
+			before.append(now)
+		else:
+			# If contour[indx] is in before list, it`s Cycle.
+			now_index = before.index(now)
+			if now_index != 0:
+				cycle_list.append(before[now_index:])
+				noncycle_list.append(before[0:now_index])
+			else:
+				cycle_list.append(before)
+			before = []
+		indx += 1
+	noncycle_list.append(before)
+	return cycle_list, noncycle_list
+
+def find_border_k_tf_map(tf_map, coord, width, height, n=5, k=4, hard_check=False):
+	'''
+	주어진 점 coord[i] 에서 n 왼쪽과 n 오른쪽 / n 윗쪽과 n 아래쪽만큼 범위 내에서 특정 갯수 k개만큼 있는 것이 차이나면 외곽으로 본다.
+	tf_map[coord[i][1] - n][coord[i][0] - n] == True 값이 없다면 외곽으로 본다.
+	'''
+	border_point = []
+	for c in coord:
+		if is_coord_border(tf_map, c, width, height, n, k, hard_check=hard_check):
+			border_point.append(c)
+	return border_point
+
+def is_coord_border(tf_map, coord, width, height, n, k, hard_check=False):
+	'''
+	주어진 coord 좌표가 한 contours의 외곽인지 ( 따라서 이어줘야 하는 것인지 ) 판별 하는 함수.
+	'''
+	check_lr = False	# Left and Right Check.
+	check_ud = False	# Up and Down check.
+	l_count = 0	# Left Coord number.
+	r_count = 0 # Right Coord number.
+	u_count = 0 # Up Coord number.
+	d_count = 0 # Down Coord number.
+
+	# Check LR
+	for y_diff in range(-1 * n , n):
+		for x_diff in range(-1 * n, 0):
+			if utility.can_go(coord[0], coord[1], width, height, x_diff=x_diff, y_diff=y_diff):
+				if tf_map[coord[1] + y_diff][coord[0] + x_diff]:
+					# 해당 좌표로 이동 가능하면서, 해당 좌표의 값이 True 인 경우,
+					l_count += 1
+	for y_diff in range(-1 * n , n):
+		for x_diff in range(1, n + 1):
+			if utility.can_go(coord[0], coord[1], width, height, x_diff=x_diff, y_diff=y_diff):
+				if tf_map[coord[1] + y_diff][coord[0] + x_diff]:
+					# 해당 좌표로 이동 가능하면서, 해당 좌표의 값이 True 인 경우,
+					r_count += 1
+	# Check UD
+	for x_diff in range(-1 * n , n):
+		for y_diff in range(-1 * n, 0):
+			if utility.can_go(coord[0], coord[1], width, height, x_diff=x_diff, y_diff=y_diff):
+				if tf_map[coord[1] + y_diff][coord[0] + x_diff]:
+					# 해당 좌표로 이동 가능하면서, 해당 좌표의 값이 True 인 경우,
+					u_count += 1
+	for x_diff in range(-1 * n , n):
+		for y_diff in range(1, n + 1):
+			if utility.can_go(coord[0], coord[1], width, height, x_diff=x_diff, y_diff=y_diff):
+				if tf_map[coord[1] + y_diff][coord[0] + x_diff]:
+					# 해당 좌표로 이동 가능하면서, 해당 좌표의 값이 True 인 경우,
+					d_count += 1
+	check_lr = abs(l_count - r_count) < k
+	check_ud = abs(u_count - d_count) < k
+	# hard_check가 체크되어 있다면, 두 조건을 모두 달성해야 True, 아니라면 둘 중 하나만 달성해도 괜찮음.
+	# 외곽이라면 True 아니면 False를 Return 해야하므로, not을 붙여준다.
+	if hard_check:
+		return not( check_lr and check_ud )
+	else:
+		return not( check_lr or check_ud )
+
+def check_border(divided_class, class_border, width, height):
+	# Get only class border coordination.
+	# 입력된 border가 실제 border인지 아닌지를 판단 해 준다.
+	ret_class_border = []
+	for coord in class_border:
+		if is_border(divided_class, coord, width, height):
+			ret_class_border.append(coord)
+	return ret_class_border
+
+def is_border(divided_class, coord, width, height):
+	# Check if given coord is outside of area.
+	# 단순히 외곽에 0이 있으면 외곽점으로 본다.
+	neighbor_list = []
+	for direction in range(4):
+		if utility.can_go(coord[0], coord[1], width, height, direction=direction):
+			neighbor = divided_class[coord[1] + utility.dir_y[direction]][coord[0] + utility.dir_x[direction]]
+			if neighbor not in neighbor_list:
+				neighbor_list.append(neighbor)
+	return len(neighbor_list) > 1
+
+# 근처 Pixel 탐색
+def get_around_pixel_list(divided_class, width, height, w, h):
+	class_kind = []
+	class_number = []
+	class_coord = []
+	for diff in [(0, -1), (0, 1), (1, -1), (1, 0), (1, 1), (-1, -1), (-1, 0), (-1, 1)]:
+		if utility.can_go(w, h, width, height, x_diff=diff[0], y_diff=diff[1]):
+			if divided_class[h + diff[1]][w + diff[0]] in class_kind:
+				class_number[class_kind.index(divided_class[h + diff[1]][w + diff[0]])] += 1
+				class_coord[class_kind.index(divided_class[h + diff[1]][w + diff[0]])].append((w + diff[0], h + diff[1]))
+			else:
+				class_kind.append(divided_class[h + diff[1]][w + diff[0]])
+				class_number.append(0)
+				class_coord.append([(w + diff[0], h + diff[1])])
+	return class_kind, class_number, class_coord
+
+def get_around_pixel(divided_class, width, height, w, h):
+	# 8 방위 중에서 가장 많은 Class Number를 가져온다. 0이 가장 많아도 그냥 0으로 가져온다.
+	class_kind, class_number, _ = get_around_pixel_list(divided_class, width, height, w, h)
+	
+	# 가장 많은 것을 가져와서 Return.
+	largest_index = 0
+	for i in range(len(class_kind)):
+		if class_number[i] > class_number[largest_index]:
+			largest_index = i
+		elif class_number[i] == class_number[largest_index]:
+			if class_kind[i] > class_number[largest_index]:
+				largest_index = i
+	
+	return class_kind[largest_index]
+
+def get_around_largest_area(divided_class, width, height, class_border, my_class):
+	'''
+	근처의 영역 중에 가장 많이 자신과 붙어있는 영역의 Class Number를 Return.
+	'''
+	total_kind = []
+	total_number = []
+	total_coord = []
+
+	for coord in class_border:
+		class_kind, class_number, class_coord = get_around_pixel_list(divided_class, width, height, coord[0], coord[1])
+		# 모든 Return 값에 대해서
+		for ck in class_kind:
+			# 이미 있던거면 class coord 가 있던건지 체크해서 입력
+			if ck in total_kind:
+				ck_index = total_kind.index(ck)
+				for cc in class_coord[class_kind.index(ck)]:
+					# 모든 coord return 값에 대해서 없는것만 추가하고 숫자를 늘림.
+					if cc not in total_coord[ck_index]:
+						total_number[ck_index] += 1
+						total_coord[ck_index].append(cc)
+			else:
+				# 처음 나온 Class 면 추가한다.
+				ck_index = class_kind.index(ck)
+				total_kind.append(ck)
+				total_number.append(class_number[ck_index])
+				total_coord.append(class_coord[ck_index])
+
+	largest_number = -1
+	largest_index = -1
+	for i in range(len(total_number)):
+		# 자신이 아닌 가장 큰 Class를 뽑아온다.
+		if total_number[i] > largest_number and total_kind[i] != my_class:
+			largest_number = total_number[i]
+			largest_index = i
+	
+	if largest_number == -1:
+		return -1
+	return total_kind[largest_index]
 
