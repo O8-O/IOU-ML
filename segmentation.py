@@ -177,20 +177,23 @@ def get_mask(fileName, cfg):
 
 	for i in range(0, instance_number):
 		mask = matrix_processing.get_largest_part(masks[i], width, height)
-		masked_image, mask_num = image_processing.get_only_instance_image(args_list[FILE_NAME], mask, width, height)
+		masked_image, mask_num = image_processing.get_only_instance_image(fileName, mask, width, height)
 		if mask_num > largest_mask_number:
 			largest_mask = masked_image
 			largest_mask_number = mask_num
 	return largest_mask, largest_mask_number, (width, height) 
 
-if __name__ == "__main__":
+def get_divided_class(inputFile, outputFile):
+	'''
+	predict masking image and get divided_class.
+	'''
 	mp.set_start_method("spawn", force=True)
 	args_list = [
 		"modules/configs/COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml", 
-		"Image/chair1.jpg", 
+		inputFile, 
 		0.6, 
 		["MODEL.WEIGHTS", "detectron2://COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x/137849600/model_final_f10217.pkl"],
-		"chair1_masked.jpg"
+		outputFile
 	]
 	cfg = setup_cfg(args_list)
 
@@ -228,6 +231,11 @@ if __name__ == "__main__":
 	divided_class, class_total, class_border, class_count, class_length = matrix_processing.get_image_into_divided_plate(tf_map, width, height)
 	# 또한 나눈 선들도 각 면적에 포함시켜 나눈다.
 	matrix_processing.contours_to_divided_class(tf_map, divided_class, class_total, class_border, class_count, width, height)
+
+	return divided_class, class_total, class_border, class_count, class_length, largest_mask, width, height
+
+if __name__ == "__main__":
+	divided_class, class_total, class_border, class_count, class_length, largest_mask, width, height = get_divided_class("Image/chair1.jpg", "chair1_masked.jpg")
 
 	# 일정 크기보다 작은 면적들은 근처에 뭐가 제일 많은지 체크해서 통합시킨다.
 	class_number, class_total, class_border, class_count, class_length = \
