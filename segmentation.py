@@ -222,11 +222,6 @@ def get_divided_class(inputFile, outputFile):
 			# 가장자리에서 가장 가까운 외곽선으로 연결한다.
 			matrix_processing.connect_nearest_point(tf_map, b, width, height, nc)
 	
-	# TF Image searching.
-	coord_image = utility.coord_to_image(coords, width, height)
-	tf_image = utility.tf_map_to_image(tf_map, width, height)
-	utility.show_with_plt([tf_image, coord_image])
-
 	# 나누어진 면적들을 DFS로 각각 가져온다. tf_map 은 true false 에서 숫자가 써있는 Map 이 된다.
 	divided_class, class_total, class_border, class_count, class_length = matrix_processing.get_image_into_divided_plate(tf_map, width, height)
 	# 또한 나눈 선들도 각 면적에 포함시켜 나눈다.

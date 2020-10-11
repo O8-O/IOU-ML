@@ -7,6 +7,7 @@ dir_y = [1, -1, 0, 0]
 
 INT_MAX = sys.maxsize
 
+# Distance 함수들
 def get_rgb_distance(pixel1, pixel2):
 	'''
 	pixel1, 2 : 3차원 list with rgb value ( 10 진법 ).
@@ -61,6 +62,10 @@ def get_average_diff(points):
 
 	return (x_diff_add/n, y_diff_add/n)
 
+def get_euclidean_distance(point1, point2):
+	return ((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2) ** 1/2
+
+# Print 함수들
 def print_list_sparse(li, height, width, density=7):
 	'''
 		li : printing list.
@@ -72,46 +77,13 @@ def print_list_sparse(li, height, width, density=7):
 			print(li[h][w], end=" ")
 		print()
 
-def can_go(x, y, width, height, direction=None, x_diff=False, y_diff=False):
-	'''
-	주어진 범위 밖으로 나가는지 체크
-	x , y : 시작 좌표
-	width, height: 가로와 세로의 길이
-	direction : 방향 index of [동, 서, 남, 북]
-	x_diff, y_diff : 만약 특정 길이만큼 이동시, 범위 밖인지 체크하고 싶을 때.
-	'''
-	if direction == None:        
-		x_check = x + x_diff > -1 and x + x_diff < width
-		y_check = y + y_diff > -1 and y + y_diff < height
-	else:
-		x_check = x + dir_x[direction] > -1 and x + dir_x[direction] < width
-		y_check = y + dir_y[direction] > -1 and y + dir_y[direction] < height
-	return x_check and y_check
-
-def make_tf_map(coords, width, height):
-	'''
-	coords의 좌표들이 true이고, 가장 외곽의 값들이 true 인 height, width 값의 true-false map을 만들어 return.
-	'''
-	tf_map = [[False for _ in range(width)] for _ in range(height)]
-	for coord in coords:
-		for c in coord:
-			tf_map[c[1]][c[0]] = True
-	for x in range(width):
-		tf_map[0][x] = True
-		tf_map[-1][x] = True
-	for y in range(height):
-		tf_map[y][0] = True
-		tf_map[y][-1] = True
-	return tf_map
-
-def get_euclidean_distance(point1, point2):
-	return ((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2) ** 1/2
-
 def print_image(image, output_file=None, window_name=None):
 	if window_name == None:
 		window_name = "TEMP_WINDOWS"
 	cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 	cv2.imshow(window_name, image)
+	cv2.waitKey(0)
+	cv2.destroyAllWindows()
 
 def show_with_plt(imgs):
 	# Add and show Image
@@ -139,7 +111,25 @@ def show_with_plt(imgs):
 		ax.axis("off")
 
 	plt.show()
-	
+
+# image-like 만드는 함수들.
+def make_tf_map(coords, width, height, border=True):
+	'''
+	coords의 좌표들이 true이고, 가장 외곽의 값들이 true 인 height, width 값의 true-false map을 만들어 return.
+	'''
+	tf_map = [[False for _ in range(width)] for _ in range(height)]
+	for coord in coords:
+		for c in coord:
+			tf_map[c[1]][c[0]] = True
+	if border:
+		for x in range(width):
+			tf_map[0][x] = True
+			tf_map[-1][x] = True
+		for y in range(height):
+			tf_map[y][0] = True
+			tf_map[y][-1] = True
+	return tf_map
+
 def coord_to_image(coordinates, width, height):
 	coord_image = [[0 for _ in range(0, width)] for _ in range(0, height)]
 	# Change Coordinates into images.
@@ -178,6 +168,7 @@ def divided_class_into_real_image(divided_class, real_image, width, height, prin
 				crop_image[h][w] = real_image[h][w]
 	return crop_image
 
+# Real Utility.
 def calc_space_with_given_coord(class_number, class_total, given_coord):
 	'''
 	사용자가 입력한 좌표들로, 그 좌표가 우리가 가지고있는 class_total 좌표계 내에 존재할시. 그 class_number를 모아서 return 해 준다.
@@ -193,6 +184,30 @@ def calc_space_with_given_coord(class_number, class_total, given_coord):
 
 	return ret_class_number
 
+def get_class_with_given_coord(class_total, given_coord):
+	ret_class_total = []
+	for coord in given_coord:
+		for cn in range(len(class_total)):
+			if coord in class_total[cn] and coord not in ret_class_total:
+				ret_class_total += class_total[cn]
+	
+	return ret_class_total
+
+def can_go(x, y, width, height, direction=None, x_diff=False, y_diff=False):
+	'''
+	주어진 범위 밖으로 나가는지 체크
+	x , y : 시작 좌표
+	width, height: 가로와 세로의 길이
+	direction : 방향 index of [동, 서, 남, 북]
+	x_diff, y_diff : 만약 특정 길이만큼 이동시, 범위 밖인지 체크하고 싶을 때.
+	'''
+	if direction == None:        
+		x_check = x + x_diff > -1 and x + x_diff < width
+		y_check = y + y_diff > -1 and y + y_diff < height
+	else:
+		x_check = x + dir_x[direction] > -1 and x + dir_x[direction] < width
+		y_check = y + dir_y[direction] > -1 and y + dir_y[direction] < height
+	return x_check and y_check
 
 if __name__ == "__main__":
 	p1 = [205, 203, 202] # #CDCBCA ( 의자 등받이 부분 )
