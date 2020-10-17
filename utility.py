@@ -25,9 +25,9 @@ def get_cielab_distance(pixel1, pixel2):
 	rgb 값의 red mean color distance를 return 한다.
 	'''
 	npPixel1 = np.array([[pixel1]], dtype='uint8')
-	lab1 = cv2.cvtColor(npPixel1, cv2.COLOR_RGB2Lab).tolist()[0][0]
+	lab1 = cv2.cvtColor(npPixel1, cv2.COLOR_BGR2Lab).tolist()[0][0]
 	npPixel2 = np.array([[pixel2]], dtype='uint8')
-	lab2 = cv2.cvtColor(npPixel2, cv2.COLOR_RGB2Lab).tolist()[0][0]
+	lab2 = cv2.cvtColor(npPixel2, cv2.COLOR_BGR2Lab).tolist()[0][0]
 
 	return get_rgb_distance(lab1, lab2)
 
