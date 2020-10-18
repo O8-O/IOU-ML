@@ -2,12 +2,13 @@ import multiprocessing as mp
 import matrix_processing
 import image_processing
 import utility
+import sys
 
 from detectron2.config import get_cfg
 from detectron2.data.detection_utils import read_image
 
 from modules.predictor import VisualizationDemo
-from utility import tf_map_to_image
+from utility import divided_class_into_image
 
 # constants
 WINDOW_NAME = "IOU Segmentation"
@@ -89,11 +90,15 @@ def merge_divided_group(divided_class, class_numbers, class_total, class_border,
 	for i in range(class_num):
 		if i in merge_group_index and i != merge_base_index:
 			ret_class_total[merge_base_index] += class_total[i]
-			ret_class_border[merge_base_index] += class_border[i]
 			ret_class_count[merge_base_index] += class_count[i]
 
 	matrix_processing.set_area(divided_class, ret_class_total[merge_base_index], ret_class_numbers[merge_base_index])
-	ret_class_border[merge_base_index] = matrix_processing.check_border(divided_class, ret_class_border[merge_base_index], width, height)
+	if len(merge_group_index) == 2:
+		ret_class_border[merge_base_index] += matrix_processing.check_border(divided_class, class_border[merge_group_index[1]], width, height)
+	else:
+		for i in range(class_num):
+			if i in merge_group_index and i != merge_base_index:
+				ret_class_border[merge_base_index] += matrix_processing.check_border(divided_class, class_border[i], width, height)
 
 	return ret_class_numbers, ret_class_total, ret_class_border, ret_class_count, len(ret_class_total), 
 
@@ -185,7 +190,7 @@ def get_mask(fileName, cfg):
 			largest_mask_number = mask_num
 	return largest_mask, largest_mask_number, (width, height) 
 
-def get_divided_class(inputFile, outputFile, ):
+def get_divided_class(inputFile, outputFile):
 	'''
 	predict masking image and get divided_class.
 	'''
@@ -223,36 +228,125 @@ def get_divided_class(inputFile, outputFile, ):
 		for b in border_point:
 			# 가장자리에서 가장 가까운 외곽선으로 연결한다.
 			matrix_processing.connect_nearest_point(tf_map, b, width, height, nc)
-	
-	utility.show_with_plt([utility.tf_map_to_image(tf_map, width, height)])
 
 	# 나누어진 면적들을 DFS로 각각 가져온다. tf_map 은 true false 에서 숫자가 써있는 Map 이 된다.
 	divided_class, class_total, class_border, class_count, class_length = matrix_processing.get_image_into_divided_plate(tf_map, width, height)
 	# 또한 나눈 선들도 각 면적에 포함시켜 나눈다.
 	matrix_processing.contours_to_divided_class(tf_map, divided_class, class_total, class_border, class_count, width, height)
 
-	return divided_class, class_total, class_border, class_count, class_length, largest_mask, width, height
-
-if __name__ == "__main__":
-	divided_class, class_total, class_border, class_count, class_length, largest_mask, width, height = get_divided_class("Image/Sofa/direction-right.jpg", "chair1_masked.jpg")
-
-	# 일정 크기보다 작은 면적들은 근처에 뭐가 제일 많은지 체크해서 통합시킨다.
+	# 작은 Size는 주변에 다시 넣는다.
 	class_number, class_total, class_border, class_count, class_length = \
 	merge_small_size(divided_class, list(range(1, class_length + 1)), class_total, class_border, class_count, width, height, min_value=120)
+
+	# 각 나눈 면적들을 다시 색 기준으로 잘라준다.
+	new_class_number = []
+	new_class_total = []
+	new_class_border = []
+	new_class_count = []
+	for i in range(class_length):
+		print("We are now doing ", i , " with total ", class_length)
+		class_number_max = class_number[-1] if len(new_class_number) == 0 else new_class_number[-1]
+		ret_class_number, ret_class_total, ret_class_border, ret_class_count = \
+			divided_into_classed_color_based(largest_mask, divided_class, class_total[i], class_number_max, width, height, div_threshold=120)
+		new_class_number += ret_class_number
+		new_class_total += ret_class_total
+		new_class_border += ret_class_border
+		new_class_count += ret_class_count
+
+	class_number = new_class_number
+	class_total = new_class_total
+	class_border = new_class_border
+	class_count = new_class_count
+	class_length = len(class_total)
+	print(class_number)
 	
-	
+	# 작은 Size는 주변에 다시 넣는다.
+	class_number, class_total, class_border, class_count, class_length = \
+	merge_small_size(divided_class, class_number, class_total, class_border, class_count, width, height, min_value=200)
+
+	class_color = image_processing.get_class_color(largest_mask, class_total, class_count)
+	class_image = utility.divided_class_into_image(divided_class, class_number, class_color, width, height, class_number)
+	utility.print_image(class_image)
+
 	class_number, class_total, class_border, class_count, class_length, class_color = \
 	merge_same_color(divided_class, class_number, class_total, class_border, class_count, largest_mask, width, height, sim_score=10)
 	
+	return divided_class, class_number, class_total, class_border, class_count, class_length, class_color, largest_mask, width, height
+
+def divided_into_classed_color_based(image, divided_class, class_total, class_number_max, width, height, div_threshold=60):
+	'''
+	Image의 색을 기준으로, 현재 주어진 Class Total의 Pixel들을 Clustering 한다. 나눠진 class_number는 class_number_max + 1 부터 차례로 부여된다.
+	만약 색상이 크게 차이나지 않는다면 나누지 않음.
+	image : 색을 참조할 Image.
+	class_total : 나눌 Coord List.
+	class_number_max : 부여할 Class Number 기준.
+	div_threshold : 나눌 Color Space Diff 기준.
+	'''
+	# Get each pixel`s colors.
+	tf_map = utility.make_tf_map([class_total], width, height, border=False)
+	total_length = len(class_total)
+	visited = [False for _ in range(total_length)]
+	visited[0] = True
+
+	class_index_divided = [[0]]
+	class_total_divided = [[class_total[0]]]
+	class_index = [-1 for _ in range(total_length)]
+	class_index[0] = 0
+	now_class_index_max = 1
+	tf_map[class_total[0][1]][class_total[0][0]] = False
+
+	for i in range(total_length - 1):
+		for direction in range(4):
+			if utility.can_go(class_total[i][0], class_total[i][1], width, height, direction=direction):
+				x = class_total[i][0] + utility.dir_x[direction]
+				y = class_total[i][1] + utility.dir_y[direction]
+				if not tf_map[y][x]:
+					continue
+				tf_map[y][x] = False
+				j = class_total.index((x, y))
+				if utility.get_cielab_distance(image[y][x], image[class_total[i][1]][class_total[i][0]]) < div_threshold:
+					class_index_divided[class_index[i]].append(j)
+					class_total_divided[class_index[i]].append(class_total[j])
+					class_index[j] = class_index[i]
+				else:
+					class_index_divided.append([j])
+					class_total_divided.append([class_total[j]])
+					class_index[j] = now_class_index_max
+					now_class_index_max += 1
+	
+	class_number = [class_number_max + i for i in range(1, now_class_index_max + 1)]
+	for i in range(len(class_number)):
+		matrix_processing.set_area(divided_class, class_total_divided[i], class_number[i])
+	class_border = [matrix_processing.check_border(divided_class, class_total_divided[i], width, height) for i in range(len(class_number))]
+	class_count = [len(class_total_divided[i]) for i in range(len(class_number))]
+	return class_number, class_total_divided, class_border, class_count
+	
+if __name__ == "__main__":
+	'''
+	Usage : 
+		-i input_fileName_with_path
+		-o output_fileName_with_path
+		-s segment_fileName_with_path
+	'''
+	argvList = sys.argv
+	divided_class, class_number, class_total, class_border, class_count, class_length, class_color, largest_mask, width, height = \
+		get_divided_class("Image/Chair1.jpg", "chair1_masked.jpg")
+	
+	# 일정 크기보다 작은 면적들은 근처에 뭐가 제일 많은지 체크해서 통합시킨다.
 	# chair1
 	printing_class = utility.calc_space_with_given_coord(class_number, class_total, \
-		[(523, 64), (491, 190), (352, 162), (318, 173), (301, 163), (264, 352), (255, 412), (358, 136), (380, 129), (399, 137), (404, 166), (429, 154), (338, 354), (254, 411), (279, 216), (265, 297), (271, 323), (285, 375), (253, 378), (250, 435), (245, 470), (236, 532), (140, 371), (42, 367), (41, 299), (130, 293), (311, 251), (44, 211), (140, 138), (285, 151), (270, 176), (313, 225), (359, 196), (243, 333), (227, 333)])
+		[(523, 64), (491, 190), (352, 162), (318, 173), (301, 163), (264, 352), (255, 412), \
+			(358, 136), (380, 129), (399, 137), (404, 166), (429, 154), (338, 354), (254, 411), \
+			(279, 216), (265, 297), (271, 323), (285, 375), (253, 378), (250, 435), (245, 470), \
+			(236, 532), (140, 371), (42, 367), (41, 299), (130, 293), (311, 251), (44, 211), \
+			(140, 138), (285, 151), (270, 176), (313, 225), (359, 196), (243, 333), (227, 333)])
+	
 	'''
 	# Sofa 1
 	printing_class = utility.calc_space_with_given_coord(class_number, class_total, [(185, 57), (252, 15), (46, 99)])
 	'''
+
 	dc_image = utility.divided_class_into_image(divided_class, class_number, class_color, width, height, class_number)
 	dri_image = utility.divided_class_into_real_image(divided_class, largest_mask, width, height, printing_class)
-	
 
 	utility.show_with_plt([dc_image, dri_image])

@@ -129,6 +129,15 @@ def check_bound(val):
 	ret_val = 255 if val > 255 else val
 	return ret_val
 
+def get_texture(image, class_total):
+	'''
+	get class_total`s texture.
+	'''
+	texture_image = np.zeros([height, width ,3], dtype=np.uint8)
+	crop_image = utility.get_class_crop_image(image, class_total)
+
+
+
 if __name__ == "__main__":
 	content_image_name = "./Image/chair1.jpg"
 	style_image_name = "./Image/lether_texture.jpg"

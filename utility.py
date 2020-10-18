@@ -168,6 +168,47 @@ def divided_class_into_real_image(divided_class, real_image, width, height, prin
 				crop_image[h][w] = real_image[h][w]
 	return crop_image
 
+def get_masked_image(image, coord, width, height):
+	'''
+	get image`s only coord parts.
+	'''
+	crop_image = np.zeros([height, width, 3], dtype=np.uint8)
+	for h in range(height):
+		for w in range(width):
+			if (h, w) in coord:
+				crop_image[h][w] = image[h][w]
+			else:
+				crop_image[h][w] = [0, 0, 0]
+	return crop_image
+
+def get_class_crop_image(image, coord, width, height):
+	x_min = width - 1
+	x_max = 0
+	y_min = height - 1
+	y_max = 0
+	
+	for c in coord:
+		if c[0] < x_min:
+			x_min = c[0]
+		if c[0] > x_max:
+			x_max = c[0]
+		
+		if c[1] < y_min:
+			y_min = c[1]
+		if c[1] > y_max:
+			y_max = c[1]
+	
+	crop_width = x_max - x_min
+	crop_height = y_max - y_min
+	crop_image = np.zeros([crop_height, crop_width, 3], dtype=np.uint8)
+	for h in range(y_min, y_max + 1):
+		for w in range(x_min, x_max + 1):
+			if (h, w) in coord:
+				crop_image[h - y_min][w - x_min] = image[h][w]
+			else:
+				crop_image[h - y_min][w - x_min] = [0, 0, 0]
+	return crop_image
+
 # Real Utility.
 def calc_space_with_given_coord(class_number, class_total, given_coord):
 	'''
