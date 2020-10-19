@@ -1,7 +1,8 @@
 import cv2
 import numpy as np
+from sklearn.cluster import KMeans
 
-def get_only_instance_image(input_file, mask, width, height, output_file=None, show=False):
+def get_only_instance_image(input_file, mask, width, height, show=False):
 	'''
 	파일 이름을 입력받아서 실제로 masking 된 부분의 사진만 output 해 준다.
 	input_file	: string, 파일 이름
@@ -10,9 +11,11 @@ def get_only_instance_image(input_file, mask, width, height, output_file=None, s
 	height		: int, 높이
 	output_file	: string, output_file 이름
 	'''
-	if output_file == None:
-		output_file = input_file.split(".")[0] + "_masked" + input_file.split(".")[1]
-	original = cv2.imread(input_file)
+	# Input file은 파일의 이름이나, np array로 들어올 수 있다.
+	if type(input_file) == type("str"):
+		original = cv2.imread(input_file)
+	else:
+		original = input_file
 	masked_image = np.zeros([height, width ,3], dtype=np.uint8)
 	mask_num = 0
 
@@ -25,7 +28,7 @@ def get_only_instance_image(input_file, mask, width, height, output_file=None, s
 
 	return masked_image, mask_num
 
-def get_contours(frame, start=190, diff=30):
+def get_contours(frame, clipLimit=16.0, tileGridSize=(16, 16), start=190, diff=30):
 	'''
 	외곽선과 그 외곽선의 그 계층관계를 Return ( contours, heirachy )
 	frame = cv2.imread 값.
@@ -34,7 +37,7 @@ def get_contours(frame, start=190, diff=30):
 	gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
 	# Histogram Normalization
-	gray_CLAHE = cv2.createCLAHE(clipLimit=16.0, tileGridSize=(16, 16)).apply(gray)
+	gray_CLAHE = cv2.createCLAHE(clipLimit=clipLimit, tileGridSize=tileGridSize).apply(gray)
 	gray_filtered = cv2.bilateralFilter(gray_CLAHE, 7, 50, 50)
 
 	# Using the Canny filter to get contours
@@ -68,3 +71,31 @@ def get_class_color(image, class_total, class_count, color_function=get_average_
 	for i in range(len(class_total)):
 		class_color.append(color_function(image, class_total[i], class_count[i]))
 	return class_color
+
+def add_up_image(original_image, add_image, add_coord, width, height):
+	output_image = np.zeros([height, width ,3], dtype=np.uint8)
+	for h in range(height):
+		for w in range(width):
+			output_image[h][w] = original_image[h][w]
+	for coord in add_coord:
+		output_image[coord[1]][coord[0]] = add_image[coord[1]][coord[0]]
+	return output_image
+
+def get_dominant_color(image, clusters=10):
+	'''
+	get image 2d np.array and get dominant color with clusters number.
+	'''
+	#convert to rgb from bgr
+	img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+			
+	#reshaping to a list of pixels
+	img = img.reshape((img.shape[0] * img.shape[1], 3))
+	
+	#using k-means to cluster pixels
+	kmeans = KMeans(n_clusters = clusters)
+	kmeans.fit(img)
+	
+	#the cluster centers are our dominant colors.
+	colors = kmeans.cluster_centers_
+	
+	return colors.astype(int).tolist()

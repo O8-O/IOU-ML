@@ -24,7 +24,7 @@ def set_selected_class(divided_class, selected_class, width, height):
 
 	return largest_part_mask
 
-def add_n_pixel_mask(divided_class, selected_class, class_border, width, height, n=10):
+def add_n_pixel_mask(divided_class, selected_class, class_border, width, height, n=14):
 	'''
 	경계를 돌면서 n 픽셀 거리 안에 있는 것들을 현재 Class에 포함시키는 함수.
 	'''
@@ -442,6 +442,8 @@ def is_coord_border(tf_map, coord, width, height, n, k, hard_check=False):
 def check_border(divided_class, class_border, width, height):
 	# Get only class border coordination.
 	# 입력된 border가 실제 border인지 아닌지를 판단 해 준다.
+	if len(class_border) < 4:
+		return class_border
 	ret_class_border = []
 	for coord in class_border:
 		if is_border(divided_class, coord, width, height):
@@ -528,4 +530,3 @@ def get_around_largest_area(divided_class, width, height, class_border, my_class
 	if largest_number == -1:
 		return -1
 	return total_kind[largest_index]
-
