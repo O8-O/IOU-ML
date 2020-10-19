@@ -1,6 +1,7 @@
 import multiprocessing as mp
 import matrix_processing
 import image_processing
+from matrix_processing import contours_to_coord
 import utility
 import sys
 
@@ -78,7 +79,7 @@ def merge_divided_group(divided_class, class_numbers, class_total, class_border,
 	ret_class_total = []
 	ret_class_border = []
 	ret_class_count = []
-	merge_base_index = merge_group_index[0] if merge_group_index[0] < merge_group_index[1] else merge_group_index[0] - 1
+	merge_base_index = merge_group_index[0]
 	
 	for i in range(class_num):
 		if not(i in merge_group_index and i != merge_base_index):
@@ -190,7 +191,7 @@ def get_mask(fileName, cfg):
 			largest_mask_number = mask_num
 	return largest_mask, largest_mask_number, (width, height) 
 
-def get_divided_class(inputFile, outputFile):
+def get_divided_class(inputFile, outputFile, clipLimit=16.0, tileGridSize=(16, 16), start=60, diff=120, delete_line_n=20, border_n=6, border_k=2, merge_min_value=120, sim_score=10):
 	'''
 	predict masking image and get divided_class.
 	'''
@@ -207,9 +208,11 @@ def get_divided_class(inputFile, outputFile):
 	largest_mask, _, (width, height) = get_mask(args_list[1], cfg)
 
 	# 잘린 이미지를 통해 외곽선을 얻어서 진행.
-	contours, heirarchy = image_processing.get_contours(largest_mask)
+	contours, heirarchy = image_processing.get_contours(largest_mask, clipLimit=clipLimit, tileGridSize=tileGridSize, start=start, diff=diff)
 	coords = matrix_processing.contours_to_coord(contours)
-	coords = matrix_processing.delete_line_threshold(coords, line_n=40)
+
+	# 작은 Line은 삭제.
+	coords = matrix_processing.delete_line_threshold(coords, line_n=delete_line_n)
 	cycle_list = []
 	noncycle_list = []
 
@@ -224,7 +227,7 @@ def get_divided_class(inputFile, outputFile):
 	tf_map = utility.make_tf_map(noncycle_list, width, height)
 	for nc in noncycle_list:
 		# 가장자리가 될 포인트를 잡는다.
-		border_point = matrix_processing.find_border_k_tf_map(tf_map, nc, width, height, n=6, k=2, hard_check=False)
+		border_point = matrix_processing.find_border_k_tf_map(tf_map, nc, width, height, n=border_n, k=border_k, hard_check=False)
 		for b in border_point:
 			# 가장자리에서 가장 가까운 외곽선으로 연결한다.
 			matrix_processing.connect_nearest_point(tf_map, b, width, height, nc)
@@ -234,42 +237,15 @@ def get_divided_class(inputFile, outputFile):
 	# 또한 나눈 선들도 각 면적에 포함시켜 나눈다.
 	matrix_processing.contours_to_divided_class(tf_map, divided_class, class_total, class_border, class_count, width, height)
 
-	# 작은 Size는 주변에 다시 넣는다.
-	class_number, class_total, class_border, class_count, class_length = \
-	merge_small_size(divided_class, list(range(1, class_length + 1)), class_total, class_border, class_count, width, height, min_value=120)
+	class_number = list(range(1, class_length + 1))
+	# 작은 Size는 주변에 다시 넣는다. 이 때, 작은 값부터 천천히 올라가는 방법을 사용한다.
+	for min_value in range(30, merge_min_value, 30):
+		class_number, class_total, class_border, class_count, class_length = \
+		merge_small_size(divided_class, class_number, class_total, class_border, class_count, width, height, min_value=min_value)
 
-	# 각 나눈 면적들을 다시 색 기준으로 잘라준다.
-	new_class_number = []
-	new_class_total = []
-	new_class_border = []
-	new_class_count = []
-	for i in range(class_length):
-		print("We are now doing ", i , " with total ", class_length)
-		class_number_max = class_number[-1] if len(new_class_number) == 0 else new_class_number[-1]
-		ret_class_number, ret_class_total, ret_class_border, ret_class_count = \
-			divided_into_classed_color_based(largest_mask, divided_class, class_total[i], class_number_max, width, height, div_threshold=120)
-		new_class_number += ret_class_number
-		new_class_total += ret_class_total
-		new_class_border += ret_class_border
-		new_class_count += ret_class_count
-
-	class_number = new_class_number
-	class_total = new_class_total
-	class_border = new_class_border
-	class_count = new_class_count
-	class_length = len(class_total)
-	print(class_number)
-	
-	# 작은 Size는 주변에 다시 넣는다.
-	class_number, class_total, class_border, class_count, class_length = \
-	merge_small_size(divided_class, class_number, class_total, class_border, class_count, width, height, min_value=200)
-
-	class_color = image_processing.get_class_color(largest_mask, class_total, class_count)
-	class_image = utility.divided_class_into_image(divided_class, class_number, class_color, width, height, class_number)
-	utility.print_image(class_image)
-
+	# 비슷한 색끼리도 모아준다.
 	class_number, class_total, class_border, class_count, class_length, class_color = \
-	merge_same_color(divided_class, class_number, class_total, class_border, class_count, largest_mask, width, height, sim_score=10)
+	merge_same_color(divided_class, class_number, class_total, class_border, class_count, largest_mask, width, height, sim_score=sim_score)
 	
 	return divided_class, class_number, class_total, class_border, class_count, class_length, class_color, largest_mask, width, height
 
@@ -330,8 +306,11 @@ if __name__ == "__main__":
 	'''
 	argvList = sys.argv
 	divided_class, class_number, class_total, class_border, class_count, class_length, class_color, largest_mask, width, height = \
-		get_divided_class("Image/Chair1.jpg", "chair1_masked.jpg")
+		get_divided_class("Image/Chair1.jpg", "chair1_masked.jpg", start=60, diff=150, merge_min_value=180, sim_score=30)
+	dc_image = utility.divided_class_into_image(divided_class, class_number, class_color, width, height, class_number)
+	utility.print_image(dc_image)
 	
+	'''
 	# 일정 크기보다 작은 면적들은 근처에 뭐가 제일 많은지 체크해서 통합시킨다.
 	# chair1
 	printing_class = utility.calc_space_with_given_coord(class_number, class_total, \
@@ -340,13 +319,13 @@ if __name__ == "__main__":
 			(279, 216), (265, 297), (271, 323), (285, 375), (253, 378), (250, 435), (245, 470), \
 			(236, 532), (140, 371), (42, 367), (41, 299), (130, 293), (311, 251), (44, 211), \
 			(140, 138), (285, 151), (270, 176), (313, 225), (359, 196), (243, 333), (227, 333)])
-	
-	'''
+
 	# Sofa 1
 	printing_class = utility.calc_space_with_given_coord(class_number, class_total, [(185, 57), (252, 15), (46, 99)])
-	'''
-
+	
+	
 	dc_image = utility.divided_class_into_image(divided_class, class_number, class_color, width, height, class_number)
 	dri_image = utility.divided_class_into_real_image(divided_class, largest_mask, width, height, printing_class)
 
 	utility.show_with_plt([dc_image, dri_image])
+	'''

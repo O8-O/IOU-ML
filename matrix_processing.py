@@ -24,7 +24,7 @@ def set_selected_class(divided_class, selected_class, width, height):
 
 	return largest_part_mask
 
-def add_n_pixel_mask(divided_class, selected_class, class_border, width, height, n=10):
+def add_n_pixel_mask(divided_class, selected_class, class_border, width, height, n=14):
 	'''
 	경계를 돌면서 n 픽셀 거리 안에 있는 것들을 현재 Class에 포함시키는 함수.
 	'''

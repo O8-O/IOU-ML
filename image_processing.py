@@ -28,7 +28,7 @@ def get_only_instance_image(input_file, mask, width, height, show=False):
 
 	return masked_image, mask_num
 
-def get_contours(frame, start=190, diff=30):
+def get_contours(frame, clipLimit=16.0, tileGridSize=(16, 16), start=190, diff=30):
 	'''
 	외곽선과 그 외곽선의 그 계층관계를 Return ( contours, heirachy )
 	frame = cv2.imread 값.
@@ -37,7 +37,7 @@ def get_contours(frame, start=190, diff=30):
 	gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
 	# Histogram Normalization
-	gray_CLAHE = cv2.createCLAHE(clipLimit=16.0, tileGridSize=(16, 16)).apply(gray)
+	gray_CLAHE = cv2.createCLAHE(clipLimit=clipLimit, tileGridSize=tileGridSize).apply(gray)
 	gray_filtered = cv2.bilateralFilter(gray_CLAHE, 7, 50, 50)
 
 	# Using the Canny filter to get contours
