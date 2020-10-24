@@ -303,7 +303,7 @@ def save_result(result_list, file_name):
 	# Save [divided_class, class_number, class_total, class_border]
 	with open(file_name, 'wb') as f:
 		pickle.dump(result_list, f)
-		
+
 def load_result(file_name):
 	with open(file_name, 'rb') as f:
 		retData = pickle.load(f)

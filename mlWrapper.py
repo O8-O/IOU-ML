@@ -4,6 +4,7 @@ import styler
 import segmentation
 import image_processing
 import utility
+import objectDetctor
 
 def segment(inputFile, outputFile, outputDataFile) :
 	'''
@@ -60,6 +61,17 @@ def styleTransfer(inputFile, inputDataFile, destFile) :
 def objectDect(inputFile, outputFile) :
 	'''
 	입력받은 inputFile의 가구를 ObjectDetection한 결과를 outputFile에 저장한다. json 형태로 저장한다.
+	현재는 bin file로만 입출력이 가능.
+	'''
+	# Model name 1 mean dataset`s folder 1.
+	model_name = '1'
+	detection_model = objectDetctor.load_model(model_name)
+	coord, str_tag, number_tag, score = objectDetctor.inference(detection_model, inputFile)
+	utility.save_result([coord, str_tag, number_tag, score], outputFile)
+
+def readResultData(outputFile):
+	'''
+	Object Detection 한 output file을 읽어서 사용 가능한 형태로 return.
 	'''
 
 def analysisFurnitureParameter(inputFile, outputFile) :

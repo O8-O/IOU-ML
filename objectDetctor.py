@@ -66,7 +66,7 @@ def run_inference_for_single_image(model, image):
 
 	return output_dict
 
-def show_inference(model, category_index, image_path):
+def inference(model, image_path):
 	# the array based representation of the image will be used later in order to prepare the
 	# result image with boxes and labels on it.
 	image_np = np.array(Image.open(image_path))
@@ -127,10 +127,10 @@ def get_rect_image(image, x_min, x_max, y_min, y_max):
 
 if __name__ == "__main__":
 	# List of the strings that is used to add correct label for each box.
-	PATH_TO_LABELS = 'C:/models/research/object_detection/data/mscoco_label_map.pbtxt'
-	category_index = label_map_util.create_category_index_from_labelmap(PATH_TO_LABELS, use_display_name=True)
+	# PATH_TO_LABELS = 'C:/models/research/object_detection/data/mscoco_label_map.pbtxt'
+	# category_index = label_map_util.create_category_index_from_labelmap(PATH_TO_LABELS, use_display_name=True)
 	# print(category_index)
 	model_name = '1'
 	detection_model = load_model(model_name)
-	show_inference(detection_model, category_index, "./Image/interior/sidekix-media-JF5IuDNxN6M-unsplash.jpg")
+	inference(detection_model, "./Image/interior/sidekix-media-JF5IuDNxN6M-unsplash.jpg")
 	
