@@ -69,6 +69,45 @@ def get_average_diff(points):
 def get_euclidean_distance(point1, point2):
 	return ((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2) ** 1/2
 
+def get_remarkable_color(color_list, color_threshold=100):
+	color_length = len(color_list)
+	lab_color_list = [cv2.cvtColor(np.array([[color_list[i]]], dtype="uint8"), cv2.COLOR_BGR2Lab).tolist()[0][0] for i in range(color_length)]
+
+	color_distance = get_color_distance_map(lab_color_list, color_length)
+	color_close = [[False for _ in range(color_length)] for _ in range(color_length)]
+	
+	for i in range(color_length):
+		for j in range(color_length):
+			if i != j and color_distance[i][j] < color_threshold:
+				color_close[i][j] = True
+				color_close[j][i] = True
+
+	close_length = []
+	for i in range(color_length):
+		temp = 0
+		for j in range(color_length):
+			if i != j and color_close[i][j]:
+				temp += 1
+		close_length.append(temp)
+	
+	close_length_sorted = [(-1 * close_length[i], i) for i in range(color_length)]
+	close_length_sorted.sort()
+
+	selected_index = [False for _ in range(color_length)]
+	result_color = []
+	for i in range(color_length):
+		if selected_index[i]:
+			continue
+		now_index = close_length_sorted[i][1]
+		selected_index[now_index] = True
+		result_color.append(color_list[now_index])
+		for j in range(color_length):
+			if color_close[now_index][j]:
+				selected_index[j] = True
+	
+	result_color = [cv2.cvtColor(np.array([[result_color[i]]], dtype="uint8"), cv2.COLOR_BGR2RGB).tolist()[0][0] for i in range(len(result_color))]
+	return result_color
+
 # Print 함수들
 def print_list_sparse(li, height, width, density=7):
 	'''

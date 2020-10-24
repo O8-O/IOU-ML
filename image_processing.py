@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from numpy.lib import utils
 from sklearn.cluster import KMeans
 
 def get_only_instance_image(input_file, mask, width, height, show=False):
@@ -81,12 +82,11 @@ def add_up_image(original_image, add_image, add_coord, width, height):
 		output_image[coord[1]][coord[0]] = add_image[coord[1]][coord[0]]
 	return output_image
 
-def get_dominant_color(image, clusters=10):
+def get_dominant_color(image, clusters=20):
 	'''
 	get image 2d np.array and get dominant color with clusters number.
 	'''
-	#convert to rgb from bgr
-	img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+	img = cv2.imread(image)
 			
 	#reshaping to a list of pixels
 	img = img.reshape((img.shape[0] * img.shape[1], 3))
@@ -137,3 +137,7 @@ def blend_color(color1, color2, change_style="median", a=1, b=1):
 		for i in range(3):
 			b_color[i] = int(color2[i] * ( gray_value / 255 ))
 	return b_color
+
+def to_gray_scale(image):
+	image_arr = cv2.imread(image)
+	return cv2.cvtColor(image_arr, cv2.COLOR_BGR2GRAY)

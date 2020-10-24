@@ -32,7 +32,7 @@ def set_color_with_color(content_image_name, stlye_color, a=5, b=1, change_style
 
 	return styled_image
 
-def set_color_with_image(input_file, color_file):
+def set_color_with_image(input_file, color_file, class_total):
 	source = utility.read_image(input_file)
 	source = cv2.cvtColor(source, cv2.COLOR_BGR2LAB)
 	target = utility.read_image(color_file)
@@ -50,9 +50,15 @@ def set_color_with_image(input_file, color_file):
 				x = ((x - s_mean[c]) * (t_std[c] / s_std[c])) + t_mean[c]
 
 				source[h, w, c] = utility.check_bound(round(x))
-
+	
+	all_class_total = []
+	for t in class_total:
+		all_class_total += t
 	source = cv2.cvtColor(source, cv2.COLOR_LAB2BGR)
-	return source
+	original_image = utility.read_image(input_file)
+
+	part_change_image = image_processing.add_up_image(original_image, source, all_class_total, width, height)
+	return part_change_image
 
 def change_dest_color(input_file, output_file, setting_color, divided_class, class_total, touch_list, a=5, b=1, change_style="median"):
 	colored_image = set_color_with_color(input_file, setting_color, a=a, b=b, change_style=change_style)
@@ -65,15 +71,39 @@ def change_dest_color(input_file, output_file, setting_color, divided_class, cla
 	part_change_image = image_processing.add_up_image(original_image, colored_image, ret_class_total, width, height)
 	utility.save_image(part_change_image, output_file)
 
+def change_dest_texture(input_file, output_file, texture_file, divided_class, class_total, touch_list):
+	stylized_image = set_style(input_file, texture_file)
+	stylized_image = np.array((stylized_image * 255)[0], np.uint8)
+	stylized_image = cv2.cvtColor(stylized_image, cv2.COLOR_BGR2RGB)
+	
+	ret_class_total	= utility.get_class_with_given_coord(class_total, touch_list)
+	original_image = utility.read_image(input_file)
+	(height, width, _) = original_image.shape
+
+	# Change ret_class_total`s part with colored image.
+	part_change_image = image_processing.add_up_image(original_image, stylized_image, ret_class_total, width, height)
+	utility.save_image(part_change_image, output_file)
+
 def change_area_color(input_file, output_file, setting_color, divided_class, area, a=5, b=1, change_style="median"):
 	colored_image = set_color_with_color(input_file, setting_color, a=a, b=b, change_style=change_style)
 
 	original_image = utility.read_image(input_file)
 	(height, width, _) = original_image.shape
-	img = utility.get_masked_image(original_image, area, width, height)
 
 	# Change ret_class_total`s part with colored image.
 	part_change_image = image_processing.add_up_image(original_image, colored_image, area, width, height)
+	utility.save_image(part_change_image, output_file)
+
+def change_area_style(input_file, output_file, texture_file, area):
+	stylized_image = set_style(input_file, texture_file)
+	stylized_image = np.array((stylized_image * 255)[0], np.uint8)
+	stylized_image = cv2.cvtColor(stylized_image, cv2.COLOR_BGR2RGB)
+
+	original_image = utility.read_image(input_file)
+	(height, width, _) = original_image.shape
+
+	# Change ret_class_total`s part with colored image.
+	part_change_image = image_processing.add_up_image(original_image, stylized_image, area, width, height)
 	utility.save_image(part_change_image, output_file)
 
 def get_similar_color_area(divided_class, class_number, class_total, class_color, dest_color, sim_threshold):
@@ -91,7 +121,6 @@ def get_similar_color_area(divided_class, class_number, class_total, class_color
 			ret_class_total += class_total[i]
 	
 	return ret_class_total
-
 
 def get_similar_color_area_adjac(divided_class, class_number, class_total, class_border, class_color, dest_color, sim_threshold):
 	'''
