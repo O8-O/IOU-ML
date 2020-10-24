@@ -1,4 +1,5 @@
 from numpy.lib import utils
+from tensorflow.python import util
 from tensorflow.python.ops.gen_math_ops import div
 from tensorflow.python.ops.math_ops import divide
 import styler
@@ -7,6 +8,10 @@ import image_processing
 from styler import change_area_style
 import utility
 import objectDetctor
+import random
+
+MAX_OUT_IMAGE = 5
+MAX_CHANGE_COLOR = 3
 
 def segment(inputFile, outputFile, outputDataFile) :
 	'''
@@ -49,7 +54,8 @@ def colorTransferToColor(inputFile, inputDataFile, outputFileName, destColor, sr
 	class_color = image_processing.get_class_color(utility.read_image(inputFile), class_total, class_count)
 
 	destArea = styler.get_similar_color_area(divided_class, class_number, class_total, class_color, srcColor, 240) # Simmilar Color threshold to 200.
-	styler.change_area_color(inputFile, outputFileName, destColor, divided_class, destArea)
+	part_change_image = styler.change_area_color(inputFile, outputFileName, destColor, divided_class, destArea)
+	utility.save_image(part_change_image, outputFileName)
 
 def colorTransferWithImage(inputFile, inputDataFile, outputFileName, destImage):
 	if utility.is_exist(inputDataFile):
@@ -62,7 +68,8 @@ def colorTransferWithImage(inputFile, inputDataFile, outputFileName, destImage):
 		_, _, class_total, _, class_count, _, _, _, _, _ = \
 		segmentation.get_divided_class(inputFile)
 	
-	changed_image = styler.set_color_with_image(inputFile, destImage, class_total)
+	_, _, mask_map, (width, height) = segmentation.get_segmented_image(inputFile)
+	changed_image = styler.set_color_with_image(inputFile, destImage, mask_map)
 	utility.save_image(changed_image, outputFileName)
 
 def textureTransferToCoord(inputFile, inputDataFile, outputFileName, destTexture, destCoordList)  :
@@ -99,8 +106,48 @@ def styleTransfer(inputFile, inputDataFile, destFile) :
 	'''
 	입력받은 inputFile의 색과 질감을 destFile의 색과 질감으로 임의로 변형해준다. 
 	'''
+	if utility.is_exist(inputDataFile):
+		[divided_class, class_number, class_total, class_border] = \
+		utility.load_result(inputDataFile)
+		class_count = []
+		for ct in class_total:
+			class_count.append(len(ct))
+	else:
+		divided_class, class_number, class_total, class_border, class_count, _, class_color, _, _, _ = \
+		segmentation.get_divided_class(inputFile)
 	
+	# Init Variables.
+	largest_mask, _, _, (width, height) = segmentation.get_segmented_image(inputFile)
+	class_color = image_processing.get_class_color(utility.read_image(inputFile), class_total, class_count)
 
+	file_extension = "." + inputFile.split(".")[1]
+	file_base_name = inputFile.split(".")[0]
+
+	segdata = file_base_name + "_segmented" + file_extension
+	utility.save_image(largest_mask, segdata)
+
+	# Get Cutted File`s color.
+	input_color = getDominantColor(segdata)
+	if len(input_color) < MAX_CHANGE_COLOR:
+		input_color *= int(MAX_CHANGE_COLOR // len(input_color)) + 1 
+
+	dest_color = getDominantColor(destFile)
+	if len(dest_color) < MAX_CHANGE_COLOR:
+		dest_color *= int(MAX_CHANGE_COLOR // len(dest_color)) + 1 
+	temp = []
+	for i in range(len(dest_color)):
+		temp.append(utility.cut_saturation(dest_color[i]))
+	dest_color = temp
+
+	for i in range(MAX_OUT_IMAGE):
+		next_file_name = file_base_name + "_" + str(i) + file_extension
+		now_input_color = random.sample(input_color, MAX_CHANGE_COLOR)
+		now_dest_color = random.sample(dest_color, MAX_CHANGE_COLOR)
+		destArea = []
+		for j in range(MAX_CHANGE_COLOR):
+			destArea.append(styler.get_similar_color_area(divided_class, class_number, class_total, class_color, now_input_color[j], 200))
+		part_change_image = styler.change_area_color_multi(inputFile, next_file_name, now_dest_color, divided_class, destArea, change_style="grayscale")
+		utility.print_image(part_change_image)
 
 def getFurnitureShape(inputFile, inputDataFile, outputFile):
 	'''
@@ -135,9 +182,9 @@ def readResultData(outputFile):
 	[coord, str_tag, number_tag, score] = utility.load_result(outputFile)
 	return coord, str_tag
 
-def getDominantColor(inputFile):
+def getDominantColor(inputFile, remarkableThreshold=150):
 	colors = image_processing.get_dominant_color(inputFile)
-	print(utility.get_remarkable_color(colors))
+	return utility.get_remarkable_color(colors, remarkableThreshold)
 
 def analysisFurnitureParameter(inputFile, outputFile) :
 	'''
@@ -161,11 +208,13 @@ if __name__ == "__main__":
 	texture_file = "Image/lether_texture.jpg"
 	texture_one_point = "Image/Chair-texture-onePoint.jpg"
 	texture_multi_point = "Image/Chair-texture-multiPoint.jpg"
+	style_transfer_image = "Image/styles.jpg"
 	# segment(fileName, outputFile, fileCheckName)
 	# colorTransferToCoord(fileName, fileCheckName, color_one_point, [255, 157, 65], [(503, 64)])
 	# colorTransferToColor(fileName, fileCheckName, color_multi_point, [255, 157, 65], [207, 205, 200])
-	# colorTransferWithImage(fileName, fileCheckName, color_change_with_image, color_dest_image)
+	# colorTransferWithImage(fileName, fileCheckName, color_change_with_image, style_transfer_image)
 	# textureTransferToCoord(fileName, fileCheckName, texture_one_point, texture_file, [(503, 64), (285, 375)])
 	# textureTransferArea(fileName, fileCheckName, texture_one_point, texture_file, [207, 205, 200])
 	# getFurnitureShape(fileName, fileCheckName, grayscale)
-	getDominantColor(fileName)
+	# getDominantColor(fileName)
+	styleTransfer(fileName, fileCheckName, style_transfer_image)

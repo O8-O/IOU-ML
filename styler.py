@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.lib import utils
 import tensorflow as tf
 from tensorflow.python import util
 import tensorflow_hub as hub
@@ -32,7 +33,7 @@ def set_color_with_color(content_image_name, stlye_color, a=5, b=1, change_style
 
 	return styled_image
 
-def set_color_with_image(input_file, color_file, class_total):
+def set_color_with_image(input_file, color_file, mask_map):
 	source = utility.read_image(input_file)
 	source = cv2.cvtColor(source, cv2.COLOR_BGR2LAB)
 	target = utility.read_image(color_file)
@@ -50,10 +51,13 @@ def set_color_with_image(input_file, color_file, class_total):
 				x = ((x - s_mean[c]) * (t_std[c] / s_std[c])) + t_mean[c]
 
 				source[h, w, c] = utility.check_bound(round(x))
-	
+
 	all_class_total = []
-	for t in class_total:
-		all_class_total += t
+	for h in range(len(mask_map)):
+		for w in range(len(mask_map[0])):
+			if mask_map[h][w]:
+				all_class_total.append((w, h))
+				
 	source = cv2.cvtColor(source, cv2.COLOR_LAB2BGR)
 	original_image = utility.read_image(input_file)
 
@@ -91,8 +95,19 @@ def change_area_color(input_file, output_file, setting_color, divided_class, are
 	(height, width, _) = original_image.shape
 
 	# Change ret_class_total`s part with colored image.
-	part_change_image = image_processing.add_up_image(original_image, colored_image, area, width, height)
-	utility.save_image(part_change_image, output_file)
+	return image_processing.add_up_image(original_image, colored_image, area, width, height)
+
+def change_area_color_multi(input_file, output_file, setting_color, divided_class, area, a=5, b=1, change_style="median"):
+	colored_image = []
+	for i in range(len(area)):
+		colored_image.append(set_color_with_color(input_file, setting_color[i], a=a, b=b, change_style=change_style))
+	original_image = utility.read_image(input_file)
+	(height, width, _) = original_image.shape
+	for i in range(len(area)):
+		original_image = image_processing.add_up_image(original_image, colored_image[i], area[i], width, height)
+
+	# Change ret_class_total`s part with colored image.
+	return original_image
 
 def change_area_style(input_file, output_file, texture_file, area):
 	stylized_image = set_style(input_file, texture_file)

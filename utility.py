@@ -35,6 +35,17 @@ def get_cielab_distance(pixel1, pixel2):
 
 	return get_rgb_distance(lab1, lab2)
 
+def cut_saturation(color, hsv_thres=100):
+	array_color = np.array([[color]], dtype='uint8')
+	hsv_color = cv2.cvtColor(array_color, cv2.COLOR_BGR2HSV).tolist()[0][0]
+	
+	if hsv_color[1] > hsv_thres:
+		hsv_color[1] /= int(255 / hsv_thres)
+	hsv_color[1] = int(hsv_color[1])
+	
+	hsv_color = np.array([[hsv_color]], dtype='uint8')
+	return cv2.cvtColor(hsv_color, cv2.COLOR_HSV2BGR).tolist()[0][0]
+
 def get_color_distance_map(class_color, class_length, distance_func=get_cielab_distance):
 	'''
 	class_color : each class average colors list.
@@ -69,7 +80,7 @@ def get_average_diff(points):
 def get_euclidean_distance(point1, point2):
 	return ((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2) ** 1/2
 
-def get_remarkable_color(color_list, color_threshold=100):
+def get_remarkable_color(color_list, color_threshold, convert_rgb=False):
 	color_length = len(color_list)
 	lab_color_list = [cv2.cvtColor(np.array([[color_list[i]]], dtype="uint8"), cv2.COLOR_BGR2Lab).tolist()[0][0] for i in range(color_length)]
 
@@ -104,8 +115,8 @@ def get_remarkable_color(color_list, color_threshold=100):
 		for j in range(color_length):
 			if color_close[now_index][j]:
 				selected_index[j] = True
-	
-	result_color = [cv2.cvtColor(np.array([[result_color[i]]], dtype="uint8"), cv2.COLOR_BGR2RGB).tolist()[0][0] for i in range(len(result_color))]
+	if convert_rgb:
+		result_color = [cv2.cvtColor(np.array([[result_color[i]]], dtype="uint8"), cv2.COLOR_BGR2RGB).tolist()[0][0] for i in range(len(result_color))]
 	return result_color
 
 # Print 함수들

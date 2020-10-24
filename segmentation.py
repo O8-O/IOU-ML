@@ -182,6 +182,7 @@ def get_mask(fileName, cfg):
 	# Mask 칠한 이미지 중에서 가장 큰것만 가지고 진행함.
 	largest_mask = []
 	largest_mask_coord = []
+	largest_mask_map = []
 	largest_mask_number = -1
 
 	for i in range(0, instance_number):
@@ -191,12 +192,10 @@ def get_mask(fileName, cfg):
 			largest_mask = masked_image
 			largest_mask_number = mask_num
 			largest_mask_map = mask
+		
 	return largest_mask, largest_mask_number, largest_mask_map, (width, height) 
 
-def get_divided_class(inputFile, clipLimit=16.0, tileGridSize=(16, 16), start=60, diff=150, delete_line_n=20, border_n=6, border_k=2, merge_min_value=180, sim_score=30, merge_mode_color=False):
-	'''
-	predict masking image and get divided_class.
-	'''
+def get_segmented_image(inputFile):
 	mp.set_start_method("spawn", force=True)
 	args_list = [
 		"modules/configs/COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml", 
@@ -207,8 +206,15 @@ def get_divided_class(inputFile, clipLimit=16.0, tileGridSize=(16, 16), start=60
 	]
 	cfg = setup_cfg(args_list)
 
-	largest_mask, _, mask_map, (width, height) = get_mask(args_list[1], cfg)
+	return get_mask(args_list[1], cfg)
 
+	
+
+def get_divided_class(inputFile, clipLimit=16.0, tileGridSize=(16, 16), start=60, diff=150, delete_line_n=20, border_n=6, border_k=2, merge_min_value=180, sim_score=30, merge_mode_color=False):
+	'''
+	predict masking image and get divided_class.
+	'''
+	largest_mask, _, mask_map, (width, height) = get_segmented_image(inputFile)
 	# 잘린 이미지를 통해 외곽선을 얻어서 진행.
 	contours, _ = image_processing.get_contours(largest_mask, clipLimit=clipLimit, tileGridSize=tileGridSize, start=start, diff=diff)
 	coords = matrix_processing.contours_to_coord(contours)
