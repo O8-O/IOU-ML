@@ -73,7 +73,7 @@ def get_class_color(image, class_total, class_count, color_function=get_average_
 	return class_color
 
 def add_up_image(original_image, add_image, add_coord, width, height):
-	output_image = np.zeros([height, width ,3], dtype=np.uint8)
+	output_image = np.zeros([height, width, 3], dtype=np.uint8)
 	for h in range(height):
 		for w in range(width):
 			output_image[h][w] = original_image[h][w]
@@ -99,3 +99,41 @@ def get_dominant_color(image, clusters=10):
 	colors = kmeans.cluster_centers_
 	
 	return colors.astype(int).tolist()
+
+# Styler
+def get_mean_and_std(x):
+	x_mean, x_std = cv2.meanStdDev(x)
+	x_mean = np.hstack(np.around(x_mean, 2))
+	x_std = np.hstack(np.around(x_std, 2))
+	return x_mean, x_std
+
+def get_gray_scale(color):
+	'''
+	입력 Color의 GrayScale 된 값을 Return.
+	color : BGR Color.
+	'''
+	gray_color = 0
+	gray_parameter = [0.1140, 0.5870, 0.2989]
+
+	for i in range(3):
+		gray_color += gray_parameter[i] * color[i]
+	
+	return gray_color
+
+def blend_color(color1, color2, change_style="median", a=1, b=1):
+	'''
+	change_style 은 median, gray_scaler 가 있다.
+	a 와 b 는 각각 color1 과 color2 의 가중치 비율. a 가 늘어나면 color1 이 늘어나고, 반대는 반대!
+	'''
+	b_color = np.zeros([3], dtype=np.uint8)
+	if change_style == "median":
+		# 두 Color의 평균을 사용하는 방법.
+		for i in range(3):
+			b_color[i] = int((color1[i] * a + color2[i] * b) / (a + b))
+		return b_color
+	else:
+		# Grayscale을 사용하는 방법. 이 방법은 가중치를 사용하지 않는다.
+		gray_value = get_gray_scale(color1)
+		for i in range(3):
+			b_color[i] = int(color2[i] * ( gray_value / 255 ))
+	return b_color

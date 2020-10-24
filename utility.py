@@ -1,6 +1,10 @@
 import cv2
 import numpy as np
 import sys
+import pickle
+import os
+import matplotlib.pyplot as plt
+import tensorflow as tf
 
 dir_x = [0, 0, 1, -1]
 dir_y = [1, -1, 0, 0]
@@ -175,10 +179,10 @@ def get_masked_image(image, coord, width, height):
 	crop_image = np.zeros([height, width, 3], dtype=np.uint8)
 	for h in range(height):
 		for w in range(width):
-			if (h, w) in coord:
-				crop_image[h][w] = image[h][w]
-			else:
-				crop_image[h][w] = [0, 0, 0]
+			crop_image[h][w] = [0, 0, 0]
+			
+	for c in coord:
+		crop_image[c[1]][c[0]] = image[c[1]][c[0]]
 	return crop_image
 
 def get_class_crop_image(image, coord, width, height):
@@ -226,6 +230,9 @@ def calc_space_with_given_coord(class_number, class_total, given_coord):
 	return ret_class_number
 
 def get_class_with_given_coord(class_total, given_coord):
+	'''
+	사용자가 입력한 좌표들로, 그 좌표가 우리가 가지고있는 class_total 좌표계 내에 존재할시. 그 class_total을 모아서 return 해 준다.
+	'''
 	ret_class_total = []
 	for coord in given_coord:
 		for cn in range(len(class_total)):
@@ -249,6 +256,65 @@ def can_go(x, y, width, height, direction=None, x_diff=False, y_diff=False):
 		x_check = x + dir_x[direction] > -1 and x + dir_x[direction] < width
 		y_check = y + dir_y[direction] > -1 and y + dir_y[direction] < height
 	return x_check and y_check
+
+def check_bound(val):
+	ret_val = 0
+	ret_val = 0 if val < 0 else val
+	ret_val = 255 if val > 255 else val
+	return ret_val
+
+# File I/O
+def init_directory(same_image_dir, nonsame_image_dir):
+    # Make basic directories.
+    make_dir(same_image_dir)
+    make_dir(nonsame_image_dir)
+
+def get_filenames(working_dir):
+    # Get files and add dirname front of files.
+    files = os.listdir(working_dir)
+    return_files = []
+    for i in range(len(files)):
+        if "." in files[i]:
+            return_files.append(working_dir + "/" + files[i])
+    return return_files
+
+def load_image(image_path, style_image=False, preserve_aspect_ratio=True):
+	"""
+	Loads and preprocesses images.
+	"""
+	img = plt.imread(image_path).astype(np.float32)[np.newaxis, ...]
+	if img.max() > 1.0:
+		img = img / 255.
+	if len(img.shape) == 3:
+		img = tf.stack([img, img, img], axis=-1)
+
+	if style_image:
+		img = tf.image.resize(img, (256, 256), preserve_aspect_ratio=preserve_aspect_ratio)
+	return img
+
+def make_dir(dir_name):
+    if not os.path.isdir(dir_name):
+        os.mkdir(dir_name)
+
+def is_exist(file_name):
+	return os.path.exists(file_name)
+
+def save_result(result_list, file_name):
+	# Save [divided_class, class_number, class_total, class_border]
+	with open(file_name, 'wb') as f:
+		pickle.dump(result_list, f)
+		
+def load_result(file_name):
+	with open(file_name, 'rb') as f:
+		retData = pickle.load(f)
+	return retData
+
+def read_image(image_file):
+	img = cv2.imread(image_file)
+	return img
+
+def save_image(image_data, file_name):
+	cv2.imwrite(file_name, image_data)
 
 if __name__ == "__main__":
 	p1 = [205, 203, 202] # #CDCBCA ( 의자 등받이 부분 )

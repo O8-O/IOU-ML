@@ -16,10 +16,11 @@ js Class 로 Python 구현체들을 python-shell node module로 감싼 것을 �
     None이 될 수 있으며, None일시 outputData를 저장하지 않는다.
 > 입력받은 파일을 Segmentation 해서 output한다.
 
-## colorTransferToCoord(inputFile, inputDataFile, destColor, destCoordList) 
+## colorTransferToCoord(inputFile, inputDataFile, outputFileName, destColor, destCoordList) 
 > inputFile : ( *string* ) 변형할 파일의 이름. 필수.
 > inputDataFile : ( *string* ) 변형한 데이터가 저장된 파일의 이름. 
     None이 될 수 있으며, None일시 다시 Segmentation부터 진행한다.
+> outputFileName : ( *string* ) 색이 변형된 데이터.
 > destColor : ( *string* ) 변형할 색. #뒤의 6자리 String으로 표현한다. 필수.
 > destCoordList : ( *list* ) 적용할곳의 좌표 모음. 만약 ~~색만 적용하고싶다면, 아래의 colorTransferToColor 함수를 살펴볼것. 필수.
 > 입력받은 inputFile의 정해진 부분( destCoordList )의 색을 destColor로 변경한다.

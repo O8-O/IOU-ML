@@ -11,23 +11,23 @@ PythonShell.run("my_script.py", options, function(err, data) {
 });
 
 class MlWrapper {
-	segmentation(inputFile, outputFile) {
+	segmentation(inputFile, outputFile, outputDataFile) {
 
 	}
 
-	colorTransferToCoord(inputFile, destColor, setCoordList) {
+	colorTransferToCoord(inputFile, inputDataFile, outputFileName, destColor, destCoordList) {
 
 	}
 
-	colorTransferToColor(inputFile, destColor, srcColor) {
+	colorTransferToColor(inputFile, inputDataFile, destColor, srcColor) {
 
 	}
 
-	textureTransfer(inputFile, destTexture, setCoordList) {
+	textureTransfer(inputFile, inputDataFile, destTexture, destCoordList) {
 
 	}
 
-	styleTransfer(inputFile, destFile) {
+	styleTransfer(inputFile, inputDataFile, destFile) {
 
 	}
 
