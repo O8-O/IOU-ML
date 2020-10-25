@@ -59,6 +59,10 @@ def colorTransferToColor(inputFile, inputDataFile, outputFileName, destColor, sr
 	utility.save_image(part_change_image, outputFileName)
 
 def colorTransferWithImage(inputFile, inputDataFile, outputFileName, destImage):
+	'''
+	입력받은 inputFile의 색을 destImage와 비슷하게 변경해서 outputFileName에 저장한다.
+	Segmentation이 된다면 자른 부분만 변경.
+	'''
 	if utility.is_exist(inputDataFile):
 		[_, _, class_total, _] = \
 		utility.load_result(inputDataFile)
@@ -86,7 +90,7 @@ def textureTransferToCoord(inputFile, inputDataFile, outputFileName, destTexture
 
 def textureTransferArea(inputFile, inputDataFile, outputFileName, destTexture, srcColor):
 	'''
-	입력받은 inputFile의 정해진 부분( destCoordList )의 질감을 destTexture로 변경한다.
+	입력받은 inputFile의 정해진 부분( srcColor와 비슷한 색 )의 질감을 destTexture로 변경한다.
 	'''
 	if utility.is_exist(inputDataFile):
 		[divided_class, class_number, class_total, _] = \

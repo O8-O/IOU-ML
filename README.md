@@ -8,7 +8,6 @@ js Class 로 Python 구현체들을 python-shell node module로 감싼 것을 �
 
 제공 함수는 아래와 같습니다.
 
-ㄴ
 ## segmentation(inputFile, outputFile, outputDataFile) 
 > inputFile : ( *string* ) 분석할 파일의 이름. 필수.
 > outputFile : ( *string* ) 분석한 파일의 이름. None이 될수있다.
