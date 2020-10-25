@@ -1,14 +1,15 @@
-from numpy.lib import utils
 from tensorflow.python import util
 from tensorflow.python.ops.gen_math_ops import div
 from tensorflow.python.ops.math_ops import divide
 import styler
 import segmentation
 import image_processing
-from styler import change_area_style
 import utility
 import objectDetctor
 import random
+import sys
+
+from utility import coord_to_image
 
 MAX_OUT_IMAGE = 5
 MAX_CHANGE_COLOR = 3
@@ -196,25 +197,67 @@ def analysisInteriorParameter(inputFile, outputFile) :
 	입력받은 inputFile의 인테리어 Parameter를 저장한다.
 	'''
 
+def option_check(option, parameter_length):
+	if len(option) < parameter_length:
+		raise Exception("OptionError : OPTIONS_TOO_SMALL");
+
+def change_hex_color_to_bgr(hex_color):
+	if len(hex_color) < 6:
+		raise Exception("OptionError : HEX_COLOR_TOO_SHORT");
+	r = format(hex_color[0:2], 'x')
+	g = format(hex_color[2:4], 'x')
+	b = format(hex_color[4:], 'x')
+
+	return [b, g, r]
+
+def change_str_to_coord(coord_str):
+	'''
+	coord_str need to be form with (a,b)
+	'''
+	if "," not in coord_str and ( "(" == coord_str[0] and ")" == coord_to_image[-1]):
+		raise Exception("OptionError : COORD_FORMAT_IS_NOT_FORMATTABLE");
+	[a, b] = coord_to_image[1:-1].split(",")
+	return (a, b)
+		
 if __name__ == "__main__":
-	fileName = "Image/chair1.jpg"
-	fileCheckName = "Image/chair1.bin"
-	grayscale = "Image/chair1-gray.jpg"
-	color_one_point = "Image/chair1-onePoint.jpg"
-	color_multi_point = "Image/chair1-multiPoint.jpg"
-	outputFile = "Image/chair1-divided.jpg"
-	color_dest_image = "Image/interior2.jpg"
-	color_change_with_image = "Image/chair1-image.jpg"
-	texture_file = "Image/lether_texture.jpg"
-	texture_one_point = "Image/Chair-texture-onePoint.jpg"
-	texture_multi_point = "Image/Chair-texture-multiPoint.jpg"
-	style_transfer_image = "Image/styles.jpg"
-	# segment(fileName, outputFile, fileCheckName)
-	# colorTransferToCoord(fileName, fileCheckName, color_one_point, [255, 157, 65], [(503, 64)])
-	# colorTransferToColor(fileName, fileCheckName, color_multi_point, [255, 157, 65], [207, 205, 200])
-	# colorTransferWithImage(fileName, fileCheckName, color_change_with_image, style_transfer_image)
-	# textureTransferToCoord(fileName, fileCheckName, texture_one_point, texture_file, [(503, 64), (285, 375)])
-	# textureTransferArea(fileName, fileCheckName, texture_one_point, texture_file, [207, 205, 200])
-	# getFurnitureShape(fileName, fileCheckName, grayscale)
-	# getDominantColor(fileName)
-	styleTransfer(fileName, fileCheckName, style_transfer_image)
+	func = sys.argv[1]
+	options = sys.argv[2:]
+	if func == "segment":
+		option_check(options, 3)
+		segment(options[0], options[1], options[2])
+	elif func == "colorTransferToCoord":
+		option_check(options, 5)
+		bgr_color = change_hex_color_to_bgr(options[3])
+		coord = []
+		for str_coord in options[4:]:
+			coord.append(change_str_to_coord(str_coord))
+		colorTransferToCoord(options[0], options[1], options[2], bgr_color, coord)
+	elif func == "colorTransferToColor":
+		option_check(options, 5)
+		bgr_color_des = change_hex_color_to_bgr(options[3])
+		bgr_color_src = change_hex_color_to_bgr(options[4])
+		colorTransferToColor(options[0], options[1], options[2], bgr_color_des, bgr_color_src)
+	elif func == "colorTransferWithImage":
+		option_check(options, 4)
+		colorTransferWithImage(options[0], options[1], options[2], options[3])
+	elif func == "textureTransferToCoord":
+		option_check(options, 5)
+		coord = []
+		for str_coord in options[4:]:
+			coord.append(change_str_to_coord(str_coord))
+		textureTransferToCoord(options[0], options[1], options[2], options[3], coord)
+	elif func == "textureTransferArea":
+		option_check(options, 5)
+		bgr_color = change_hex_color_to_bgr(options[4])
+		textureTransferArea(options[0], options[1], options[2], options[3], bgr_color)
+	elif func == "getFurnitureShape":
+		option_check(options, 3)
+		getFurnitureShape(options[0], options[1], options[2])
+	elif func == "getDominantColor":
+		option_check(options, 1)
+		getDominantColor(options[0])
+
+	elif func == "styleTransfer":
+		option_check(options, 3)
+		styleTransfer(options[0], options[1], options[2])
+	
