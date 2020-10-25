@@ -1,27 +1,8 @@
 import subprocess
-import sys
-import os
 import shutil
+import utility
 
 DEBUG = False
-
-def init_directory(same_image_dir, nonsame_image_dir):
-    # Make basic directories.
-    make_dir(same_image_dir)
-    make_dir(nonsame_image_dir)
-
-def get_filenames(working_dir):
-    # Get files and add dirname front of files.
-    files = os.listdir(working_dir)
-    return_files = []
-    for i in range(len(files)):
-        if "." in files[i]:
-            return_files.append(working_dir + "/" + files[i])
-    return return_files
-
-def make_dir(dir_name):
-    if not os.path.isdir(dir_name):
-        os.mkdir(dir_name)
 
 def get_not_same_file_name(nonsame_dir, i, j, file_path):
     return nonsame_dir + "/same_" + str(i) + "_" + str(j) + "_" + file_path.split("/")[-1]
@@ -32,8 +13,8 @@ if __name__ == "__main__":
     same_dir = working_dir + "/Same"
     nonsame_dir =working_dir + "/NotSame"
     
-    init_directory(same_dir, nonsame_dir)
-    files = get_filenames(working_dir)
+    utility.init_directory(same_dir, nonsame_dir)
+    files = utility.get_filenames(working_dir)
     file_amount = len(files)
 
     simmilarity_list = []
