@@ -267,8 +267,6 @@ def change_str_to_coord(coord_str):
 	return (a, b)
 		
 if __name__ == "__main__":
-	objectDetect("Image/interior/", "")
-	'''
 	func = sys.argv[1]
 	options = sys.argv[2:]
 	if func == "segment":
@@ -308,4 +306,4 @@ if __name__ == "__main__":
 	elif func == "styleTransfer":
 		option_check(options, 3)
 		styleTransfer(options[0], options[1], options[2])
-	'''
+	

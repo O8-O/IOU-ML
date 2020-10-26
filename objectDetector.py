@@ -6,11 +6,11 @@ import pathlib
 from PIL import Image
 
 from object_detection.utils import ops as utils_ops
-from object_detection.utils import label_map_util
 from object_detection.utils import visualization_utils as vis_util
 
 import utility
-import image_processing
+import matplotlib.pyplot as plt
+from sklearn.mixture import GaussianMixture
 
 # patch tf1 into `utils.ops`
 utils_ops.tf = tf.compat.v1
@@ -105,3 +105,9 @@ def visualize_image(output_dict, image, category_index):
 		category_index, max_boxes_to_draw=30, min_score_thresh=0.4, use_normalized_coordinates=True, line_thickness=8)
 
 	return image
+
+def classifier(data, cluster_number=16):
+	# 몇개로 나눌것인지 분류. 입력은 오직 number 같은 숫자만 가능하다.
+	gmm = GaussianMixture(n_components=cluster_number)
+	gmm.fit(data)
+	return gmm.predict(data)

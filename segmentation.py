@@ -212,7 +212,10 @@ def get_divided_class(inputFile, clipLimit=16.0, tileGridSize=(16, 16), start=60
 	'''
 	predict masking image and get divided_class.
 	'''
-	largest_mask, largest_index, mask_map, (width, height) = get_segmented_image(inputFile)
+	try:
+		largest_mask, largest_index, mask_map, (width, height) = get_segmented_image(inputFile)
+	except RuntimeError:
+		largest_index = -1
 	# 만약 Detectron이 감지하지 못한경우
 	if largest_index == -1:
 		largest_mask = utility.read_image(inputFile)
