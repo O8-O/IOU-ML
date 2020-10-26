@@ -1,12 +1,15 @@
 import multiprocessing as mp
 import matrix_processing
 import image_processing
+from matrix_processing import contours_to_coord
 import utility
+import sys
 
 from detectron2.config import get_cfg
 from detectron2.data.detection_utils import read_image
 
 from modules.predictor import VisualizationDemo
+from utility import divided_class_into_image
 
 # constants
 WINDOW_NAME = "IOU Segmentation"
@@ -77,21 +80,26 @@ def merge_divided_group(divided_class, class_numbers, class_total, class_border,
 	ret_class_border = []
 	ret_class_count = []
 	merge_base_index = merge_group_index[0]
-
+	
 	for i in range(class_num):
 		if not(i in merge_group_index and i != merge_base_index):
 			ret_class_numbers.append(class_numbers[i])
 			ret_class_total.append(class_total[i])
 			ret_class_border.append(class_border[i])
 			ret_class_count.append(class_count[i])
+
 	for i in range(class_num):
 		if i in merge_group_index and i != merge_base_index:
 			ret_class_total[merge_base_index] += class_total[i]
-			ret_class_border[merge_base_index] += class_border[i]
 			ret_class_count[merge_base_index] += class_count[i]
 
 	matrix_processing.set_area(divided_class, ret_class_total[merge_base_index], ret_class_numbers[merge_base_index])
-	ret_class_border[merge_base_index] = matrix_processing.check_border(divided_class, ret_class_border[merge_base_index], width, height)
+	if len(merge_group_index) == 2:
+		ret_class_border[merge_base_index] += matrix_processing.check_border(divided_class, class_border[merge_group_index[1]], width, height)
+	else:
+		for i in range(class_num):
+			if i in merge_group_index and i != merge_base_index:
+				ret_class_border[merge_base_index] += matrix_processing.check_border(divided_class, class_border[i], width, height)
 
 	return ret_class_numbers, ret_class_total, ret_class_border, ret_class_count, len(ret_class_total), 
 
@@ -173,6 +181,8 @@ def get_mask(fileName, cfg):
 	instance_number = len(predictions['instances'])
 	# Mask 칠한 이미지 중에서 가장 큰것만 가지고 진행함.
 	largest_mask = []
+	largest_mask_coord = []
+	largest_mask_map = []
 	largest_mask_number = -1
 
 	for i in range(0, instance_number):
@@ -181,28 +191,36 @@ def get_mask(fileName, cfg):
 		if mask_num > largest_mask_number:
 			largest_mask = masked_image
 			largest_mask_number = mask_num
-	return largest_mask, largest_mask_number, (width, height) 
+			largest_mask_map = mask
+		
+	return largest_mask, largest_mask_number, largest_mask_map, (width, height) 
 
-def get_divided_class(inputFile, outputFile):
-	'''
-	predict masking image and get divided_class.
-	'''
+def get_segmented_image(inputFile):
 	mp.set_start_method("spawn", force=True)
 	args_list = [
 		"modules/configs/COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml", 
 		inputFile, 
 		0.6, 
 		["MODEL.WEIGHTS", "detectron2://COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x/137849600/model_final_f10217.pkl"],
-		outputFile
+		"no_name"
 	]
 	cfg = setup_cfg(args_list)
 
-	largest_mask, _, (width, height) = get_mask(args_list[1], cfg)
+	return get_mask(args_list[1], cfg)
 
+	
+
+def get_divided_class(inputFile, clipLimit=16.0, tileGridSize=(16, 16), start=60, diff=150, delete_line_n=20, border_n=6, border_k=2, merge_min_value=180, sim_score=30, merge_mode_color=False):
+	'''
+	predict masking image and get divided_class.
+	'''
+	largest_mask, _, mask_map, (width, height) = get_segmented_image(inputFile)
 	# 잘린 이미지를 통해 외곽선을 얻어서 진행.
-	contours, heirarchy = image_processing.get_contours(largest_mask)
+	contours, _ = image_processing.get_contours(largest_mask, clipLimit=clipLimit, tileGridSize=tileGridSize, start=start, diff=diff)
 	coords = matrix_processing.contours_to_coord(contours)
-	coords = matrix_processing.delete_line_threshold(coords, line_n=40)
+
+	# 작은 Line은 삭제.
+	coords = matrix_processing.delete_line_threshold(coords, line_n=delete_line_n)
 	cycle_list = []
 	noncycle_list = []
 
@@ -217,37 +235,104 @@ def get_divided_class(inputFile, outputFile):
 	tf_map = utility.make_tf_map(noncycle_list, width, height)
 	for nc in noncycle_list:
 		# 가장자리가 될 포인트를 잡는다.
-		border_point = matrix_processing.find_border_k_tf_map(tf_map, nc, width, height, n=6, k=2, hard_check=False)
+		border_point = matrix_processing.find_border_k_tf_map(tf_map, nc, width, height, n=border_n, k=border_k, hard_check=False)
 		for b in border_point:
 			# 가장자리에서 가장 가까운 외곽선으로 연결한다.
 			matrix_processing.connect_nearest_point(tf_map, b, width, height, nc)
-	
-	# TF Image searching.
-	coord_image = utility.coord_to_image(coords, width, height)
-	tf_image = utility.tf_map_to_image(tf_map, width, height)
-	utility.show_with_plt([tf_image, coord_image])
 
 	# 나누어진 면적들을 DFS로 각각 가져온다. tf_map 은 true false 에서 숫자가 써있는 Map 이 된다.
 	divided_class, class_total, class_border, class_count, class_length = matrix_processing.get_image_into_divided_plate(tf_map, width, height)
 	# 또한 나눈 선들도 각 면적에 포함시켜 나눈다.
 	matrix_processing.contours_to_divided_class(tf_map, divided_class, class_total, class_border, class_count, width, height)
 
-	return divided_class, class_total, class_border, class_count, class_length, largest_mask, width, height
+	class_number = list(range(1, class_length + 1))
+	# 작은 Size는 주변에 다시 넣는다. 이 때, 작은 값부터 천천히 올라가는 방법을 사용한다.
+	for min_value in range(30, merge_min_value, 30):
+		class_number, class_total, class_border, class_count, class_length = \
+		merge_small_size(divided_class, class_number, class_total, class_border, class_count, width, height, min_value=min_value)
 
-if __name__ == "__main__":
-	divided_class, class_total, class_border, class_count, class_length, largest_mask, width, height = get_divided_class("Image/chair1.jpg", "chair1_masked.jpg")
-
-	# 일정 크기보다 작은 면적들은 근처에 뭐가 제일 많은지 체크해서 통합시킨다.
+	# 원래 Segmentation 돤것에서 나가는 것은 삭제한다.
 	class_number, class_total, class_border, class_count, class_length = \
-	merge_small_size(divided_class, list(range(1, class_length + 1)), class_total, class_border, class_count, width, height, min_value=120)
-	
-	class_number, class_total, class_border, class_count, class_length, class_color = \
-	merge_same_color(divided_class, class_number, class_total, class_border, class_count, largest_mask, width, height, sim_score=60)
-	
-	printing_class = utility.calc_space_with_given_coord(class_number, class_total, \
-		[(529, 53), (386, 164), (503, 194), (324, 291), (246, 338), (167, 384), (45, 382), (65, 165), (441, 167), (312, 167), (492, 197), (414, 189), (329, 128), (510, 186), (479, 183), (46, 352), (242, 452), (362, 202), (326, 198)])
-	
-	dc_image = utility.divided_class_into_image(divided_class, class_number, class_color, width, height, class_number)
-	dri_image = utility.divided_class_into_real_image(divided_class, largest_mask, width, height, printing_class)
+	out_mask_delete(mask_map, class_number, class_total, class_border, class_count, class_length, out_pixel_threshold=0)
 
-	utility.show_with_plt([dc_image, dri_image])
+	class_color = image_processing.get_class_color(largest_mask, class_total, class_count)
+	if merge_mode_color:
+		# 비슷한 색끼리도 모아준다.
+		class_number, class_total, class_border, class_count, class_length, class_color = \
+		merge_same_color(divided_class, class_number, class_total, class_border, class_count, largest_mask, width, height, sim_score=sim_score)
+	
+	return divided_class, class_number, class_total, class_border, class_count, class_length, class_color, largest_mask, width, height
+
+def out_mask_delete(mask_map, class_number, class_total, class_border, class_count, class_length, out_pixel_threshold=0):
+	ret_class_number = []
+	ret_class_total = []
+	ret_class_border = []
+	ret_class_count = []
+	
+	for i in range(class_length):
+		pass_flag = True
+		out_pixel_num = 0
+
+		for coord in class_total[i]:
+			if not mask_map[coord[1]][coord[0]]:
+				if out_pixel_num < out_pixel_threshold:
+					out_pixel_num += 1
+					continue
+				pass_flag = False
+				break
+
+		if pass_flag:
+			ret_class_number.append(class_number[i])
+			ret_class_total.append(class_total[i])
+			ret_class_border.append(class_border[i])
+			ret_class_count.append(class_count[i])
+			
+	return ret_class_number, ret_class_total, ret_class_border, ret_class_count, len(ret_class_total)
+
+def divided_into_classed_color_based(image, divided_class, class_total, class_number_max, width, height, div_threshold=60):
+	'''
+	Image의 색을 기준으로, 현재 주어진 Class Total의 Pixel들을 Clustering 한다. 나눠진 class_number는 class_number_max + 1 부터 차례로 부여된다.
+	만약 색상이 크게 차이나지 않는다면 나누지 않음.
+	image : 색을 참조할 Image.
+	class_total : 나눌 Coord List.
+	class_number_max : 부여할 Class Number 기준.
+	div_threshold : 나눌 Color Space Diff 기준.
+	'''
+	# Get each pixel`s colors.
+	tf_map = utility.make_tf_map([class_total], width, height, border=False)
+	total_length = len(class_total)
+	visited = [False for _ in range(total_length)]
+	visited[0] = True
+
+	class_index_divided = [[0]]
+	class_total_divided = [[class_total[0]]]
+	class_index = [-1 for _ in range(total_length)]
+	class_index[0] = 0
+	now_class_index_max = 1
+	tf_map[class_total[0][1]][class_total[0][0]] = False
+
+	for i in range(total_length - 1):
+		for direction in range(4):
+			if utility.can_go(class_total[i][0], class_total[i][1], width, height, direction=direction):
+				x = class_total[i][0] + utility.dir_x[direction]
+				y = class_total[i][1] + utility.dir_y[direction]
+				if not tf_map[y][x]:
+					continue
+				tf_map[y][x] = False
+				j = class_total.index((x, y))
+				if utility.get_cielab_distance(image[y][x], image[class_total[i][1]][class_total[i][0]]) < div_threshold:
+					class_index_divided[class_index[i]].append(j)
+					class_total_divided[class_index[i]].append(class_total[j])
+					class_index[j] = class_index[i]
+				else:
+					class_index_divided.append([j])
+					class_total_divided.append([class_total[j]])
+					class_index[j] = now_class_index_max
+					now_class_index_max += 1
+	
+	class_number = [class_number_max + i for i in range(1, now_class_index_max + 1)]
+	for i in range(len(class_number)):
+		matrix_processing.set_area(divided_class, class_total_divided[i], class_number[i])
+	class_border = [matrix_processing.check_border(divided_class, class_total_divided[i], width, height) for i in range(len(class_number))]
+	class_count = [len(class_total_divided[i]) for i in range(len(class_number))]
+	return class_number, class_total_divided, class_border, class_count

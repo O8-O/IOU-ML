@@ -24,7 +24,7 @@ def set_selected_class(divided_class, selected_class, width, height):
 
 	return largest_part_mask
 
-def add_n_pixel_mask(divided_class, selected_class, class_border, width, height, n=10):
+def add_n_pixel_mask(divided_class, selected_class, class_border, width, height, n=14):
 	'''
 	경계를 돌면서 n 픽셀 거리 안에 있는 것들을 현재 Class에 포함시키는 함수.
 	'''
@@ -328,6 +328,53 @@ def find_nearest_point(tf_map, point, width, height, before, n=5):
 						nearest_point = (x, y)
 	return nearest_point
 
+def union_find(class_adjac, color_distance, color_threshold):
+	'''
+	주어진 Class들을 가지고 집합으로 묶어준다.
+	'''
+	class_length = len(class_adjac)
+	union_set = [i for i in range(class_length)]
+
+	for i in range(class_length):
+		for j in range(i):
+			if class_adjac[i][j] and color_distance[i][j] < color_threshold:
+				union_set[j] = parent(i)
+	
+	# Class 종류를 계산
+	class_kind = []
+	for i in range(class_length):
+		union_set[i] = parent(i)
+	
+	for i in range(class_length):
+		if union_set[i] not in class_kind:
+			class_kind.append(union_set[i])
+	class_set = [[] for _ in range(len(class_kind))]
+
+	# 각 Class 종류에 따른 list로 묶어서 return.
+	for i in range(class_length):
+		class_set[union_set[i]].append(i)
+	
+	return class_set
+
+def parent(union_set, index):
+	# Get Parent for given union set.
+	now = union_set[index]
+
+	while now != union_set[now]:
+		now = union_set[now]
+
+	retValue = now
+	now = union_set[index]
+	before = index
+	
+	# 결과로 나온 부모로 모두 변경해준다.
+	while now != union_set[now]:
+		union_set[before] = retValue
+		before = now
+		now = union_set[now]
+
+	return retValue
+
 # 좌표와 리스트 탐색
 def contours_to_coord(contours):
 	'''
@@ -356,6 +403,40 @@ def delete_line_threshold(contours, line_n=40):
 		if contour_len[i] > line_n:
 			ret_contours.append(contours[i])
 	return ret_contours
+
+def coord_analysis(coord_list):
+	'''
+	좌표를 둘러싼 사각형의 양 위 아래, coord 평균을 조사.
+	'''
+	x_min = utility.INT_MAX
+	x_max = 0
+	y_min = utility.INT_MAX
+	y_max = 0
+	coord_add = (0, 0)
+	coord_len = len(coord_list)
+
+	for c in coord_list:
+		coord_add[0] += c[0]
+		coord_add[1] += c[1]
+		if c[0] < x_min:
+			x_min = c[0]
+		if c[1] < y_min:
+			y_min = c[1]
+		if c[0] > x_max:
+			x_max = c[0]
+		if c[1] < y_max:
+			y_max = c[1]
+	return [x_min, x_max, y_min, y_max], (coord_add[0] / coord_len, coord_add[1] / coord_len)
+
+def find_adjac_class_number(divided_class, class_border, width, height):
+	# 근처의 인접한 class number를 return.
+	ret_class_number = []
+	for c in class_border:
+		for direction in range(0, 4):
+			if utility.can_go(c[0], c[1], width, height, direction=direction):
+				if divided_class[c[1] + utility.dir_y[direction]][c[0] + utility.dir_x[direction]] not in ret_class_number:
+					ret_class_number.append(divided_class[c[1] + utility.dir_y[direction]][c[0] + utility.dir_x[direction]])
+	return ret_class_number
 
 # 외곽선 분해하기
 def divide_cycle(coords):
@@ -442,6 +523,8 @@ def is_coord_border(tf_map, coord, width, height, n, k, hard_check=False):
 def check_border(divided_class, class_border, width, height):
 	# Get only class border coordination.
 	# 입력된 border가 실제 border인지 아닌지를 판단 해 준다.
+	if len(class_border) < 4:
+		return class_border
 	ret_class_border = []
 	for coord in class_border:
 		if is_border(divided_class, coord, width, height):
@@ -528,4 +611,3 @@ def get_around_largest_area(divided_class, width, height, class_border, my_class
 	if largest_number == -1:
 		return -1
 	return total_kind[largest_index]
-
