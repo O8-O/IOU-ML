@@ -1,17 +1,16 @@
-from tensorflow.python import util
-from tensorflow.python.ops.gen_math_ops import div
-from tensorflow.python.ops.math_ops import divide
 import styler
 import segmentation
 import image_processing
 import utility
 import objectDetector
 import random
+import cv2
 import sys
+import numpy as np
 
 from utility import coord_to_image
 
-MAX_OUT_IMAGE = 5
+MAX_OUT_IMAGE = 8
 MAX_CHANGE_COLOR = 3
 
 def segment(inputFile, outputFile, outputDataFile) :
@@ -26,6 +25,7 @@ def segment(inputFile, outputFile, outputDataFile) :
 	dc_image = utility.divided_class_into_image(divided_class, class_number, class_color, width, height, class_number)
 	if not outputFile == None:
 		utility.save_image(dc_image, outputFile)
+	return divided_class, class_number, class_total, class_border
 
 def colorTransferToCoord(inputFile, inputDataFile, outputFileName, destColor, destCoordList) :
 	'''
@@ -195,14 +195,16 @@ def objectDetect(inputFile, outputFile) :
 			save_image_name += f.split("/")[-1].split(".")[0] + "/"
 			utility.make_dir(save_image_name)
 			rect_files = []
-			
+
+			additional_infor = []
 			for i in range(len(str_tag)):
+				additional_infor.append(-1)
 				rect_image = image_processing.get_rect_image(f, int(coord[i][0]), int(coord[i][1]), int(coord[i][2]), int(coord[i][3]))
 				rect_image_name = save_image_name + f.split("/")[-1]
 				rect_image_name = utility.add_name(rect_image_name, "_" + str(i))
 				rect_files.append(rect_image_name)
 				utility.save_image(rect_image, rect_image_name)
-			utility.save_result([coord, str_tag, number_tag, score, rect_files], save_file_name)
+			utility.save_result([coord, str_tag, number_tag, score, rect_files, additional_infor], save_file_name)
 			
 	else:
 		coord, str_tag, number_tag, score = objectDetector.inference(detection_model, inputFile)
@@ -215,13 +217,15 @@ def objectDetect(inputFile, outputFile) :
 		save_image_name += inputFile.split("/")[-1].split(".")[0] + "/"
 		utility.make_dir(save_image_name)
 		rect_files = []
+		additional_infor = []
 		for i in range(len(str_tag)):
+			additional_infor.append(-1)
 			rect_image = image_processing.get_rect_image(inputFile, int(coord[i][0]), int(coord[i][1]), int(coord[i][2]), int(coord[i][3]))
 			rect_image_name = save_image_name + inputFile.split("/")[-1]
 			rect_image_name = utility.add_name(rect_image_name, "_" + str(i))
 			rect_files.append(rect_image_name)
 			utility.save_image(rect_image, rect_image_name)
-		utility.save_result([coord, str_tag, number_tag, score, rect_files], outputFile)
+		utility.save_result([coord, str_tag, number_tag, score, rect_files, additional_infor], outputFile)
 
 def readResultData(outputFile):
 	'''
@@ -265,8 +269,62 @@ def change_str_to_coord(coord_str):
 		raise Exception("OptionError : COORD_FORMAT_IS_NOT_FORMATTABLE");
 	[a, b] = coord_to_image[1:-1].split(",")
 	return (a, b)
-		
+
+def getStyleChangedImage(inputFile, preferenceImages):
+	'''
+	inputFile에 대한 preferenceImages 를 출력. 
+	print 함수로 각 변환한 사진의 이름을 출력하고, 마지막에 몇 장을 줄것인지 출력한다.
+	1. Object Detect 결과로 나온 가구들을 Segmentation 화 한다.
+	2. 사용자가 좋아한다고 고른 인테리어의 가구 + 사용자가 좋아할것 같은 단독 가구의 색 / 재질 / Segment 를 가져온다.
+	3. 원래의 인테리어의 가구들에 적절하게 배치한다.
+		3-1. 원래의 인테리어 가구의 재질과 색을 변경한다. ( 모든 sofa, chair 에 대해서 ) -> 40%
+		3-2. 원래의 인테리어 가구를 사용자가 좋아할만한 가구로 변경한다. ( 모든 sofa, chair에 대해서 color filter 적용한걸로 ) -> 40%
+		3-3. 원래의 인테리어에서 색상 filter만 입혀준다. ( 위의 0.2 부분 )
+	'''
+	tempdata = "temp"
+	outputFile = utility.get_add_dir(inputFile, tempdata)
+	# fav_furniture_list = "Image/InteriorImage/test_furniture/sofa"
+	# fav_furniture_list = utility.get_filenames(fav_furniture_list)
+	# 기존 Data 출력.
+	[coord, str_tag, number_tag, score, rect_files, additional_infor, n_color] = utility.get_od_data(inputFile)
+	'''
+	segment_data = []
+	for f in rect_files:
+		segment_data.append(utility.get_segment_data(f))
+	fav_furniture_seg_data = []
+	for f in fav_furniture_list:
+		fav_furniture_seg_data.append(utility.get_segment_data(f))
+	'''
+	for i in range(MAX_OUT_IMAGE):
+		now_index = random.randint(0, len(preferenceImages) - 1)
+		saveOutputFile = utility.add_name(outputFile, "_" + str(i))
+		if i < MAX_OUT_IMAGE * 0.0:
+			changed_image = styler.set_color_with_image(inputFile, preferenceImages[now_index], mask_map=None)
+			utility.save_image(changed_image, saveOutputFile)
+		elif i < MAX_OUT_IMAGE * 1.0:
+			original_image = utility.read_image(inputFile)
+			for i in range(len(str_tag)):
+				if ( str_tag[i] == "sofa" or str_tag[i] == "chair" ):
+					styled_furniture = styler.set_color_with_image(rect_files[i], preferenceImages[now_index], None)
+					original_image = image_processing.add_up_image_to(original_image, styled_furniture, int(coord[i][0]), int(coord[i][1]), int(coord[i][2]), int(coord[i][3]))
+			utility.save_image(original_image, saveOutputFile)
+		else:
+			original_image = utility.read_image(inputFile)
+			for i in range(len(str_tag)):
+				if ( str_tag[i] == "sofa" or str_tag[i] == "chair" ):
+					stylized_image = styler.set_style(rect_files[i], preferenceImages[now_index])
+					stylized_image = np.array((stylized_image * 255)[0], np.uint8)
+					styled_furniture = cv2.cvtColor(stylized_image, cv2.COLOR_BGR2RGB)
+					original_image = image_processing.add_up_image_to(original_image, styled_furniture, int(coord[i][0]), int(coord[i][1]), int(coord[i][2]), int(coord[i][3]))
+			utility.save_image(original_image, saveOutputFile)
+		print(saveOutputFile)
+	print(MAX_OUT_IMAGE)
+
 if __name__ == "__main__":
+	getStyleChangedImage("Image/Interior/interior7.jpg", utility.get_filenames("Image/InteriorImage/test/label1"))
+
+	if len(sys.argv) == 1:
+		exit()
 	func = sys.argv[1]
 	options = sys.argv[2:]
 	if func == "segment":
@@ -306,4 +364,7 @@ if __name__ == "__main__":
 	elif func == "styleTransfer":
 		option_check(options, 3)
 		styleTransfer(options[0], options[1], options[2])
-	
+	elif func == "getStyleChangedImage":
+		option_check(options, 2)
+		preferenceImages =  utility.get_filenames("Image/InteriorImage/test/label1")
+		getStyleChangedImage(options[0], preferenceImages)

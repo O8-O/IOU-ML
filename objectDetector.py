@@ -101,11 +101,8 @@ def visualize_image(output_dict, image, category_index):
 
 	return image
 
-def classifier(data, cluster_number=16):
+def classifier(data, cluster_number=4):
 	# 몇개로 나눌것인지 분류. 입력은 오직 number 같은 숫자만 가능하다.
 	gmm = GaussianMixture(n_components=cluster_number)
 	gmm.fit(data)
 	return gmm.predict(data)
-
-if __name__ == "__main__":
-	load_model("1")

@@ -1,19 +1,13 @@
 import multiprocessing as mp
 import matrix_processing
 import image_processing
-from matrix_processing import contours_to_coord
 import utility
-import sys
 
 from detectron2.config import get_cfg
 from detectron2.data.detection_utils import read_image
 
 from modules.predictor import VisualizationDemo
-from utility import divided_class_into_image
 
-# constants
-WINDOW_NAME = "IOU Segmentation"
-FILE_NAME = 1
 def setup_cfg(args):
 	# load config from file and command-line arguments
 	cfg = get_cfg()
@@ -79,7 +73,7 @@ def merge_divided_group(divided_class, class_numbers, class_total, class_border,
 	ret_class_total = []
 	ret_class_border = []
 	ret_class_count = []
-	merge_base_index = merge_group_index[0]
+	merge_base_index = merge_group_index[0] if merge_group_index[0] < merge_group_index[1] else merge_group_index[1]
 	
 	for i in range(class_num):
 		if not(i in merge_group_index and i != merge_base_index):
@@ -343,3 +337,9 @@ def divided_into_classed_color_based(image, divided_class, class_total, class_nu
 	class_border = [matrix_processing.check_border(divided_class, class_total_divided[i], width, height) for i in range(len(class_number))]
 	class_count = [len(class_total_divided[i]) for i in range(len(class_number))]
 	return class_number, class_total_divided, class_border, class_count
+
+if __name__ == "__main__":
+	divided_class, class_number, class_total, class_border, class_count, class_length, class_color, largest_mask, width, height = \
+		get_divided_class("Image/chair1.jpg")
+	dc_image = utility.divided_class_into_image(divided_class, class_number, class_color, width, height, class_number)
+	utility.print_image(dc_image)

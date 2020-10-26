@@ -6,7 +6,6 @@ import tensorflow_hub as hub
 import cv2
 
 import utility
-import segmentation
 import image_processing
 import matrix_processing
 
@@ -38,6 +37,9 @@ def set_color_with_image(input_file, color_file, mask_map):
 	source = cv2.cvtColor(source, cv2.COLOR_BGR2LAB)
 	target = utility.read_image(color_file)
 	target = cv2.cvtColor(target, cv2.COLOR_BGR2LAB)
+	(h, w, _) = target.shape
+	if h * w > 480000:
+		target = cv2.resize(target, None, fx=0.1, fy=0.1, interpolation=cv2.INTER_AREA)
 	
 	s_mean, s_std = image_processing.get_mean_and_std(source)
 	t_mean, t_std = image_processing.get_mean_and_std(target)
@@ -52,14 +54,19 @@ def set_color_with_image(input_file, color_file, mask_map):
 
 				source[h, w, c] = utility.check_bound(round(x))
 
+	original_image = utility.read_image(input_file)
 	all_class_total = []
-	for h in range(len(mask_map)):
-		for w in range(len(mask_map[0])):
-			if mask_map[h][w]:
+	if mask_map == None:
+		for h in range(len(original_image)):
+			for w in range(len(original_image[0])):
 				all_class_total.append((w, h))
+	else:
+		for h in range(len(mask_map)):
+			for w in range(len(mask_map[0])):
+				if mask_map[h][w]:
+					all_class_total.append((w, h))
 				
 	source = cv2.cvtColor(source, cv2.COLOR_LAB2BGR)
-	original_image = utility.read_image(input_file)
 
 	part_change_image = image_processing.add_up_image(original_image, source, all_class_total, width, height)
 	return part_change_image
