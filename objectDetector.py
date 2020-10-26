@@ -9,7 +9,6 @@ from object_detection.utils import ops as utils_ops
 from object_detection.utils import visualization_utils as vis_util
 
 import utility
-import matplotlib.pyplot as plt
 from sklearn.mixture import GaussianMixture
 
 # patch tf1 into `utils.ops`
@@ -20,12 +19,8 @@ tf.gfile = tf.io.gfile
 
 def load_model(model_name):
 	# Get model with model name. If exists at cache, load it.
-	base_url = 'http://download.tensorflow.org/models/object_detection/'
-	model_file = model_name + '.tar.gz'
-	model_dir = tf.keras.utils.get_file( fname=model_name, origin=base_url + model_file, untar=True, cache_dir="./")
-	
-	model_dir = pathlib.Path(model_dir)/"saved_model"
-	model = tf.saved_model.load(str(model_dir))
+	model_dir = "./datasets/" + model_name + "/saved_model"
+	model = tf.saved_model.load(model_dir)
 
 	return model
 
@@ -111,3 +106,6 @@ def classifier(data, cluster_number=16):
 	gmm = GaussianMixture(n_components=cluster_number)
 	gmm.fit(data)
 	return gmm.predict(data)
+
+if __name__ == "__main__":
+	load_model("1")
