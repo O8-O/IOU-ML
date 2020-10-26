@@ -263,6 +263,18 @@ def get_class_crop_image(image, coord, width, height):
 				crop_image[h - y_min][w - x_min] = [0, 0, 0]
 	return crop_image
 
+# Object Detector
+def tag_classifier(input_class):
+	# Get only our interested feature.
+	class_number = [15, 33, 44, 46, 47, 48, 49, 50, 51, 58, 62, 63, 64, 65, 67, 70, 72, 73, 74, 75, 76, 78, 79, 80, 81, 82, 84, 85, 86, 89]
+	class_tag = ["bench", "suitcase", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "table", "chair", "couch", "potted plant", \
+		"bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "microwave", "oven", "toaster", "sink", "refrigerator", "book", \
+		"clock", "vase", "hair drier"]
+	if input_class in class_number:
+		return class_tag[class_number.index(input_class)]
+	else:
+		return None
+
 # Real Utility.
 def calc_space_with_given_coord(class_number, class_total, given_coord):
 	'''
@@ -366,11 +378,7 @@ def read_image(image_file):
 def save_image(image_data, file_name):
 	cv2.imwrite(file_name, image_data)
 
-if __name__ == "__main__":
-	p1 = [205, 203, 202] # #CDCBCA ( 의자 등받이 부분 )
-	p2 = [217, 217, 219] # #D9D9DB ( 의자 바닥 부분 )
-
-	class_color = [[205, 203, 202], [90, 92, 105], [217, 217, 219], [172, 166, 153], [194, 181, 160], [92, 63, 43]]
-	print(get_color_distance_map(class_color, len(class_color)))
-	print(get_color_distance_map(class_color, len(class_color), distance_func=get_rgb_distance))
-	
+def add_name(input_file, addition, extension=None):
+	file_extension = ("." + input_file.split(".")[1]) if extension == None else ("." + extension)
+	file_base_name = input_file.split(".")[0] 
+	return file_base_name + addition + file_extension

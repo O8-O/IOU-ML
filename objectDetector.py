@@ -9,6 +9,9 @@ from object_detection.utils import ops as utils_ops
 from object_detection.utils import label_map_util
 from object_detection.utils import visualization_utils as vis_util
 
+import utility
+import image_processing
+
 # patch tf1 into `utils.ops`
 utils_ops.tf = tf.compat.v1
 
@@ -25,17 +28,6 @@ def load_model(model_name):
 	model = tf.saved_model.load(str(model_dir))
 
 	return model
-
-def tag_classifier(input_class):
-	# Get only our interested feature.
-	class_number = [15, 33, 44, 46, 47, 48, 49, 50, 51, 58, 62, 63, 64, 65, 67, 70, 72, 73, 74, 75, 76, 78, 79, 80, 81, 82, 84, 85, 86, 89]
-	class_tag = ["bench", "suitcase", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "table", "chair", "couch", "potted plant", \
-		"bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "microwave", "oven", "toaster", "sink", "refrigerator", "book", \
-		"clock", "vase", "hair drier"]
-	if input_class in class_number:
-		return class_tag[class_number.index(input_class)]
-	else:
-		return None
 
 def run_inference_for_single_image(model, image):
 	image = np.asarray(image)
@@ -97,9 +89,9 @@ def get_score_cut_result(coord, tag, score, score_threshold=40):
 	find_length = len(score)
 	for s in range(find_length):
 		if score[s] > score_threshold:
-			if tag_classifier(tag[s]) != None:
+			if utility.tag_classifier(tag[s]) != None:
 				return_coord.append(coord[s])
-				return_tag.append(tag_classifier(tag[s]))
+				return_tag.append(utility.tag_classifier(tag[s]))
 				return_score.append(score[s])
 
 	return return_coord, return_tag, return_score
@@ -113,24 +105,3 @@ def visualize_image(output_dict, image, category_index):
 		category_index, max_boxes_to_draw=30, min_score_thresh=0.4, use_normalized_coordinates=True, line_thickness=8)
 
 	return image
-
-def get_rect_image(image, x_min, x_max, y_min, y_max):
-	# 지정된 max to min의 사각형 이미지를 얻어낸다.
-	width = x_max - x_min + 1
-	height = y_max - y_min + 1
-	output_image = np.zeros([height, width, 3], dtype=np.uint8)
-	
-	for y in range(y_min, y_max + 1):
-		for x in range(x_min, x_max + 1):
-			output_image[y - y_min][x - x_min] = image[y][x]
-	return output_image
-
-if __name__ == "__main__":
-	# List of the strings that is used to add correct label for each box.
-	# PATH_TO_LABELS = 'C:/models/research/object_detection/data/mscoco_label_map.pbtxt'
-	# category_index = label_map_util.create_category_index_from_labelmap(PATH_TO_LABELS, use_display_name=True)
-	# print(category_index)
-	model_name = '1'
-	detection_model = load_model(model_name)
-	inference(detection_model, "./Image/interior/sidekix-media-JF5IuDNxN6M-unsplash.jpg")
-	

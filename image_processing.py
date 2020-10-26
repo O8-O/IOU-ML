@@ -141,3 +141,16 @@ def blend_color(color1, color2, change_style="median", a=1, b=1):
 def to_gray_scale(image):
 	image_arr = cv2.imread(image)
 	return cv2.cvtColor(image_arr, cv2.COLOR_BGR2GRAY)
+
+# Object Detector
+def get_rect_image(f, x_min, x_max, y_min, y_max):
+	# 지정된 max to min의 사각형 이미지를 얻어낸다.
+	width = x_max - x_min + 1
+	height = y_max - y_min + 1
+	image = cv2.imread(f)
+	output_image = np.zeros([height, width, 3], dtype=np.uint8)
+	
+	for y in range(y_min, y_max):
+		for x in range(x_min, x_max):
+			output_image[y - y_min][x - x_min] = image[y][x]
+	return output_image

@@ -5,7 +5,7 @@ import styler
 import segmentation
 import image_processing
 import utility
-import objectDetctor
+import objectDetector
 import random
 import sys
 
@@ -128,7 +128,7 @@ def styleTransfer(inputFile, inputDataFile, destFile) :
 	file_extension = "." + inputFile.split(".")[1]
 	file_base_name = inputFile.split(".")[0]
 
-	segdata = file_base_name + "_segmented" + file_extension
+	segdata = utility.add_name(inputFile, "_segmented")
 	utility.save_image(largest_mask, segdata)
 
 	# Get Cutted File`s color.
@@ -169,22 +169,65 @@ def getFurnitureShape(inputFile, inputDataFile, outputFile):
 	utility.print_image(gray_image)
 	utility.save_image(gray_image, outputFile)
 
-def objectDect(inputFile, outputFile) :
+def objectDetect(inputFile, outputFile) :
 	'''
 	입력받은 inputFile의 가구를 ObjectDetection한 결과를 outputFile에 저장한다. json 형태로 저장한다.
 	현재는 bin file로만 입출력이 가능.
+	폴더를 입력하면 outputFile은 무시됨.
 	'''
 	# Model name 1 mean dataset`s folder 1.
 	model_name = '1'
-	detection_model = objectDetctor.load_model(model_name)
-	coord, str_tag, number_tag, score = objectDetctor.inference(detection_model, inputFile)
-	utility.save_result([coord, str_tag, number_tag, score], outputFile)
+	detection_model = objectDetector.load_model(model_name)
+	if "." not in inputFile:
+		# File is directory
+		files = utility.get_filenames(inputFile)
+		for f in files:
+			if "." not in f:
+				continue
+
+			coord, str_tag, number_tag, score = objectDetector.inference(detection_model, f)
+			# Save file name make.
+			save_file_name = utility.add_name(f, "_od", extension="bin")
+			dirs = save_file_name.split("/")
+			save_image_name = ""
+			for d in dirs[0:-1]:
+				save_image_name += d + "/"
+			save_image_name += f.split("/")[-1].split(".")[0] + "/"
+			utility.make_dir(save_image_name)
+			rect_files = []
+			
+			for i in range(len(str_tag)):
+				rect_image = image_processing.get_rect_image(f, int(coord[i][0]), int(coord[i][1]), int(coord[i][2]), int(coord[i][3]))
+				rect_image_name = save_image_name + f.split("/")[-1]
+				rect_image_name = utility.add_name(rect_image_name, "_" + str(i))
+				rect_files.append(rect_image_name)
+				utility.save_image(rect_image, rect_image_name)
+			utility.save_result([coord, str_tag, number_tag, score, rect_files], save_file_name)
+			
+	else:
+		coord, str_tag, number_tag, score = objectDetector.inference(detection_model, inputFile)
+		# Save file name make.
+		save_file_name = utility.add_name(inputFile, "_od", extension="bin")
+		dirs = save_file_name.split("/")
+		save_image_name = ""
+		for d in dirs[0:-1]:
+			save_image_name += d + "/"
+		save_image_name += inputFile.split("/")[-1].split(".")[0] + "/"
+		utility.make_dir(save_image_name)
+		rect_files = []
+		for i in range(len(str_tag)):
+			rect_image = image_processing.get_rect_image(inputFile, int(coord[i][0]), int(coord[i][1]), int(coord[i][2]), int(coord[i][3]))
+			rect_image_name = save_image_name + inputFile.split("/")[-1]
+			rect_image_name = utility.add_name(rect_image_name, "_" + str(i))
+			rect_files.append(rect_image_name)
+			utility.save_image(rect_image, rect_image_name)
+		utility.save_result([coord, str_tag, number_tag, score, rect_files], outputFile)
 
 def readResultData(outputFile):
 	'''
 	Object Detection 한 output file을 읽어서 사용 가능한 형태로 return.
 	'''
-	[coord, str_tag, number_tag, score] = utility.load_result(outputFile)
+	[coord, str_tag, number_tag, score, filenames] = utility.load_result(outputFile)
 	return coord, str_tag
 
 def getDominantColor(inputFile, remarkableThreshold=150):
@@ -224,6 +267,8 @@ def change_str_to_coord(coord_str):
 	return (a, b)
 		
 if __name__ == "__main__":
+	objectDetect("Image/interior/", "")
+	'''
 	func = sys.argv[1]
 	options = sys.argv[2:]
 	if func == "segment":
@@ -260,8 +305,7 @@ if __name__ == "__main__":
 	elif func == "getDominantColor":
 		option_check(options, 1)
 		getDominantColor(options[0])
-
 	elif func == "styleTransfer":
 		option_check(options, 3)
 		styleTransfer(options[0], options[1], options[2])
-	
+	'''

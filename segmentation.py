@@ -208,13 +208,17 @@ def get_segmented_image(inputFile):
 
 	return get_mask(args_list[1], cfg)
 
-	
-
 def get_divided_class(inputFile, clipLimit=16.0, tileGridSize=(16, 16), start=60, diff=150, delete_line_n=20, border_n=6, border_k=2, merge_min_value=180, sim_score=30, merge_mode_color=False):
 	'''
 	predict masking image and get divided_class.
 	'''
-	largest_mask, _, mask_map, (width, height) = get_segmented_image(inputFile)
+	largest_mask, largest_index, mask_map, (width, height) = get_segmented_image(inputFile)
+	# 만약 Detectron이 감지하지 못한경우
+	if largest_index == -1:
+		largest_mask = utility.read_image(inputFile)
+		(height, width, _) = largest_mask.shape
+		mask_map = [[True for _ in range(width)] for _ in range(height)]
+
 	# 잘린 이미지를 통해 외곽선을 얻어서 진행.
 	contours, _ = image_processing.get_contours(largest_mask, clipLimit=clipLimit, tileGridSize=tileGridSize, start=start, diff=diff)
 	coords = matrix_processing.contours_to_coord(contours)
