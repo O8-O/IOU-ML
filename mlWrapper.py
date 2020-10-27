@@ -1,17 +1,17 @@
 from tensorflow.python import util
-from tensorflow.python.ops.gen_math_ops import div
-from tensorflow.python.ops.math_ops import divide
 import styler
 import segmentation
 import image_processing
 import utility
-import objectDetctor
+import objectDetector
 import random
+import cv2
 import sys
+import numpy as np
 
 from utility import coord_to_image
 
-MAX_OUT_IMAGE = 5
+MAX_OUT_IMAGE = 8
 MAX_CHANGE_COLOR = 3
 
 def segment(inputFile, outputFile, outputDataFile) :
@@ -26,6 +26,7 @@ def segment(inputFile, outputFile, outputDataFile) :
 	dc_image = utility.divided_class_into_image(divided_class, class_number, class_color, width, height, class_number)
 	if not outputFile == None:
 		utility.save_image(dc_image, outputFile)
+	return divided_class, class_number, class_total, class_border
 
 def colorTransferToCoord(inputFile, inputDataFile, outputFileName, destColor, destCoordList) :
 	'''
@@ -128,7 +129,7 @@ def styleTransfer(inputFile, inputDataFile, destFile) :
 	file_extension = "." + inputFile.split(".")[1]
 	file_base_name = inputFile.split(".")[0]
 
-	segdata = file_base_name + "_segmented" + file_extension
+	segdata = utility.add_name(inputFile, "_segmented")
 	utility.save_image(largest_mask, segdata)
 
 	# Get Cutted File`s color.
@@ -169,22 +170,69 @@ def getFurnitureShape(inputFile, inputDataFile, outputFile):
 	utility.print_image(gray_image)
 	utility.save_image(gray_image, outputFile)
 
-def objectDect(inputFile, outputFile) :
+def objectDetect(inputFile, outputFile) :
 	'''
 	입력받은 inputFile의 가구를 ObjectDetection한 결과를 outputFile에 저장한다. json 형태로 저장한다.
 	현재는 bin file로만 입출력이 가능.
+	폴더를 입력하면 outputFile은 무시됨.
 	'''
 	# Model name 1 mean dataset`s folder 1.
 	model_name = '1'
-	detection_model = objectDetctor.load_model(model_name)
-	coord, str_tag, number_tag, score = objectDetctor.inference(detection_model, inputFile)
-	utility.save_result([coord, str_tag, number_tag, score], outputFile)
+	detection_model = objectDetector.load_model(model_name)
+	if "." not in inputFile:
+		# File is directory
+		files = utility.get_filenames(inputFile)
+		for f in files:
+			if "." not in f:
+				continue
+
+			coord, str_tag, number_tag, score = objectDetector.inference(detection_model, f)
+			# Save file name make.
+			save_file_name = utility.add_name(f, "_od", extension="bin")
+			dirs = save_file_name.split("/")
+			save_image_name = ""
+			for d in dirs[0:-1]:
+				save_image_name += d + "/"
+			save_image_name += f.split("/")[-1].split(".")[0] + "/"
+			utility.make_dir(save_image_name)
+			rect_files = []
+
+			additional_infor = []
+			for i in range(len(str_tag)):
+				additional_infor.append(-1)
+				rect_image = image_processing.get_rect_image(f, int(coord[i][0]), int(coord[i][1]), int(coord[i][2]), int(coord[i][3]))
+				rect_image_name = save_image_name + f.split("/")[-1]
+				rect_image_name = utility.add_name(rect_image_name, "_" + str(i))
+				rect_files.append(rect_image_name)
+				utility.save_image(rect_image, rect_image_name)
+			utility.save_result([coord, str_tag, number_tag, score, rect_files, additional_infor], save_file_name)
+			
+	else:
+		coord, str_tag, number_tag, score = objectDetector.inference(detection_model, inputFile)
+		# Save file name make.
+		save_file_name = utility.add_name(inputFile, "_od", extension="bin")
+		dirs = save_file_name.split("/")
+		save_image_name = ""
+		for d in dirs[0:-1]:
+			save_image_name += d + "/"
+		save_image_name += inputFile.split("/")[-1].split(".")[0] + "/"
+		utility.make_dir(save_image_name)
+		rect_files = []
+		additional_infor = []
+		for i in range(len(str_tag)):
+			additional_infor.append(-1)
+			rect_image = image_processing.get_rect_image(inputFile, int(coord[i][0]), int(coord[i][1]), int(coord[i][2]), int(coord[i][3]))
+			rect_image_name = save_image_name + inputFile.split("/")[-1]
+			rect_image_name = utility.add_name(rect_image_name, "_" + str(i))
+			rect_files.append(rect_image_name)
+			utility.save_image(rect_image, rect_image_name)
+		utility.save_result([coord, str_tag, number_tag, score, rect_files, additional_infor], outputFile)
 
 def readResultData(outputFile):
 	'''
 	Object Detection 한 output file을 읽어서 사용 가능한 형태로 return.
 	'''
-	[coord, str_tag, number_tag, score] = utility.load_result(outputFile)
+	[coord, str_tag, number_tag, score, filenames] = utility.load_result(outputFile)
 	return coord, str_tag
 
 def getDominantColor(inputFile, remarkableThreshold=150):
@@ -222,8 +270,69 @@ def change_str_to_coord(coord_str):
 		raise Exception("OptionError : COORD_FORMAT_IS_NOT_FORMATTABLE");
 	[a, b] = coord_to_image[1:-1].split(",")
 	return (a, b)
-		
+
+def getStyleChangedImage(inputFile, preferenceImages, tempdata="temp"):
+	'''
+	inputFile에 대한 preferenceImages 를 출력. 
+	print 함수로 각 변환한 사진의 이름을 출력하고, 마지막에 몇 장을 줄것인지 출력한다.
+	1. Object Detect 결과로 나온 가구들을 Segmentation 화 한다.
+	2. 사용자가 좋아한다고 고른 인테리어의 가구 + 사용자가 좋아할것 같은 단독 가구의 색 / 재질 / Segment 를 가져온다.
+	3. 원래의 인테리어의 가구들에 적절하게 배치한다.
+		3-1. 원래의 인테리어 가구의 재질과 색을 변경한다. ( 모든 sofa, chair 에 대해서 ) -> 40%
+		3-2. 원래의 인테리어 가구를 사용자가 좋아할만한 가구로 변경한다. ( 모든 sofa, chair에 대해서 color filter 적용한걸로 ) -> 40%
+		3-3. 원래의 인테리어에서 색상 filter만 입혀준다. ( 위의 0.2 부분 )
+	'''
+	outputFile = utility.get_add_dir(inputFile, tempdata)
+	# fav_furniture_list = "Image/InteriorImage/test_furniture/sofa"
+	# fav_furniture_list = utility.get_filenames(fav_furniture_list)
+	# 기존 Data 출력.
+	[coord, str_tag, number_tag, score, rect_files, additional_infor, n_color] = utility.get_od_data(inputFile)
+	'''
+	segment_data = []
+	for f in rect_files:
+		segment_data.append(utility.get_segment_data(f))
+	fav_furniture_seg_data = []
+	for f in fav_furniture_list:
+		fav_furniture_seg_data.append(utility.get_segment_data(f))
+	'''
+	for i in range(MAX_OUT_IMAGE):
+		now_index = random.randint(0, len(preferenceImages) - 1)
+		saveOutputFile = utility.add_name(outputFile, "_" + str(i))
+		if i < MAX_OUT_IMAGE * 0.2:
+			original_image = utility.read_image(inputFile)
+			decrese_ratio = (1.0, 1.0)
+			if original_image.shape[0] * original_image.shape[1] > 600 * 800:
+				decrese_ratio = (0.3, 0.3)
+			changed_image = styler.set_color_with_image(inputFile, preferenceImages[now_index], mask_map=None)
+			utility.save_image(changed_image, saveOutputFile)
+		elif i < MAX_OUT_IMAGE * 1.0:
+			original_image = utility.read_image(inputFile)
+			# 특정 크기 이상이면 decrease ratio를 조절하여 1/3으로..
+			decrese_ratio = (1.0, 1.0)
+			if original_image.shape[0] * original_image.shape[1] > 600 * 800:
+				decrese_ratio = (0.3, 0.3)
+				original_image = cv2.resize(original_image, None, fx=decrese_ratio[0], fy=decrese_ratio[1], interpolation=cv2.INTER_AREA)
+			for i in range(len(str_tag)):
+				if ( str_tag[i] == "sofa" or str_tag[i] == "chair" ):
+					styled_furniture = styler.set_color_with_image(rect_files[i], preferenceImages[now_index], None, decrese_ratio)
+					original_image = image_processing.add_up_image_to(original_image, styled_furniture, \
+						int(coord[i][0] * decrese_ratio[0]), int(coord[i][1] * decrese_ratio[0]), int(coord[i][2] * decrese_ratio[0]), int(coord[i][3] * decrese_ratio[0]))
+			utility.save_image(original_image, saveOutputFile)
+		else:
+			original_image = utility.read_image(inputFile)
+			for i in range(len(str_tag)):
+				if ( str_tag[i] == "sofa" or str_tag[i] == "chair" ):
+					stylized_image = styler.set_style(rect_files[i], preferenceImages[now_index])
+					stylized_image = np.array((stylized_image * 255)[0], np.uint8)
+					styled_furniture = cv2.cvtColor(stylized_image, cv2.COLOR_BGR2RGB)
+					original_image = image_processing.add_up_image_to(original_image, styled_furniture, int(coord[i][0]), int(coord[i][1]), int(coord[i][2]), int(coord[i][3]))
+			utility.save_image(original_image, saveOutputFile)
+		print(saveOutputFile)
+	print(MAX_OUT_IMAGE)
+
 if __name__ == "__main__":
+	if len(sys.argv) == 1:
+		exit()
 	func = sys.argv[1]
 	options = sys.argv[2:]
 	if func == "segment":
@@ -260,8 +369,27 @@ if __name__ == "__main__":
 	elif func == "getDominantColor":
 		option_check(options, 1)
 		getDominantColor(options[0])
-
 	elif func == "styleTransfer":
 		option_check(options, 3)
 		styleTransfer(options[0], options[1], options[2])
-	
+	elif func == "getStyleChangedImage":
+		option_check(options, 2)
+		# Check Whether Preference.
+		label_data = utility.get_label_files()
+		label = [0, 0, 0, 0]
+		label_file = ["label0", "label1", "label2", "label3"]
+
+		# 어느 라벨에 속하는지 검사.
+		for i in range(1, len(options)):
+			base_file = options[i].split("/")[-1]
+			for i in range(len(label_data)):
+				if base_file in label_data[i]:
+					label[i] += 1
+		
+		max_index = 0
+		for i in range(len(label)):
+			if label[i] > label[max_index]:
+				max_index = i
+
+		# 해당 라벨에 속하는 file로 image를 처리.
+		getStyleChangedImage(options[0], utility.get_filenames("Image/InteriorImage/test/" + label_file[max_index]))

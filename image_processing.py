@@ -100,6 +100,28 @@ def get_dominant_color(image, clusters=20):
 	
 	return colors.astype(int).tolist()
 
+def add_up_image_to(image, add_image, min_x, max_x, min_y, max_y):
+	(add_h, add_w, _) = add_image.shape
+	(original_h, original_w, _) = image.shape
+	width = max_x - min_x
+	height = max_y - min_y
+	
+	if add_h * add_w > width * height:
+		resize_add_image = cv2.resize(add_image, (width, height), interpolation=cv2.INTER_AREA)
+	else:
+		resize_add_image = cv2.resize(add_image, (width, height), interpolation=cv2.INTER_CUBIC)
+	
+	output_image = np.zeros(image.shape, dtype=np.uint8)
+	for y in range(original_h):
+		for x in range(original_w):
+			output_image[y][x] = image[y][x]
+			
+	for y in range(min_y, max_y):
+		for x in range(min_x, max_x):
+			output_image[y][x] = resize_add_image[y - min_y][x - min_x]
+	
+	return output_image
+
 # Styler
 def get_mean_and_std(x):
 	x_mean, x_std = cv2.meanStdDev(x)
@@ -141,3 +163,16 @@ def blend_color(color1, color2, change_style="median", a=1, b=1):
 def to_gray_scale(image):
 	image_arr = cv2.imread(image)
 	return cv2.cvtColor(image_arr, cv2.COLOR_BGR2GRAY)
+
+# Object Detector
+def get_rect_image(f, x_min, x_max, y_min, y_max):
+	# 지정된 max to min의 사각형 이미지를 얻어낸다.
+	width = x_max - x_min
+	height = y_max - y_min
+	image = cv2.imread(f)
+	output_image = np.zeros([height, width, 3], dtype=np.uint8)
+	
+	for y in range(y_min, y_max):
+		for x in range(x_min, x_max):
+			output_image[y - y_min][x - x_min] = image[y][x]
+	return output_image
