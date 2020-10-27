@@ -1,3 +1,4 @@
+from tensorflow.python import util
 import styler
 import segmentation
 import image_processing
@@ -270,7 +271,7 @@ def change_str_to_coord(coord_str):
 	[a, b] = coord_to_image[1:-1].split(",")
 	return (a, b)
 
-def getStyleChangedImage(inputFile, preferenceImages):
+def getStyleChangedImage(inputFile, preferenceImages, tempdata="temp"):
 	'''
 	inputFile에 대한 preferenceImages 를 출력. 
 	print 함수로 각 변환한 사진의 이름을 출력하고, 마지막에 몇 장을 줄것인지 출력한다.
@@ -281,7 +282,6 @@ def getStyleChangedImage(inputFile, preferenceImages):
 		3-2. 원래의 인테리어 가구를 사용자가 좋아할만한 가구로 변경한다. ( 모든 sofa, chair에 대해서 color filter 적용한걸로 ) -> 40%
 		3-3. 원래의 인테리어에서 색상 filter만 입혀준다. ( 위의 0.2 부분 )
 	'''
-	tempdata = "temp"
 	outputFile = utility.get_add_dir(inputFile, tempdata)
 	# fav_furniture_list = "Image/InteriorImage/test_furniture/sofa"
 	# fav_furniture_list = utility.get_filenames(fav_furniture_list)
@@ -298,7 +298,11 @@ def getStyleChangedImage(inputFile, preferenceImages):
 	for i in range(MAX_OUT_IMAGE):
 		now_index = random.randint(0, len(preferenceImages) - 1)
 		saveOutputFile = utility.add_name(outputFile, "_" + str(i))
-		if i < MAX_OUT_IMAGE * 0.0:
+		if i < MAX_OUT_IMAGE * 0.2:
+			original_image = utility.read_image(inputFile)
+			decrese_ratio = (1.0, 1.0)
+			if original_image.shape[0] * original_image.shape[1] > 600 * 800:
+				decrese_ratio = (0.3, 0.3)
 			changed_image = styler.set_color_with_image(inputFile, preferenceImages[now_index], mask_map=None)
 			utility.save_image(changed_image, saveOutputFile)
 		elif i < MAX_OUT_IMAGE * 1.0:
@@ -370,5 +374,22 @@ if __name__ == "__main__":
 		styleTransfer(options[0], options[1], options[2])
 	elif func == "getStyleChangedImage":
 		option_check(options, 2)
-		preferenceImages =  utility.get_filenames("Image/InteriorImage/test/label1")
-		getStyleChangedImage(options[0], preferenceImages)
+		# Check Whether Preference.
+		label_data = utility.get_label_files()
+		label = [0, 0, 0, 0]
+		label_file = ["label0", "label1", "label2", "label3"]
+
+		# 어느 라벨에 속하는지 검사.
+		for i in range(1, len(options)):
+			base_file = options[i].split("/")[-1]
+			for i in range(len(label_data)):
+				if base_file in label_data[i]:
+					label[i] += 1
+		
+		max_index = 0
+		for i in range(len(label)):
+			if label[i] > label[max_index]:
+				max_index = i
+
+		# 해당 라벨에 속하는 file로 image를 처리.
+		getStyleChangedImage(options[0], utility.get_filenames("Image/InteriorImage/test/" + label_file[max_index]))

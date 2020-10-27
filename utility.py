@@ -442,3 +442,13 @@ def get_segment_data(image):
 		return load_result(sg_file)
 	else:
 		return None
+
+def get_label_files(label_loc="Image/InteriorImage/test/"):
+	label_data = []
+	for label_folder in ["label0", "label1", "label2", "label3"]:
+		files = get_filenames(label_loc + label_folder)
+		label_data.append([])
+		for f in files:
+			label_data[-1].append(f.split("/")[-1])
+			
+	return label_data
