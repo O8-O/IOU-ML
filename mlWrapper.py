@@ -303,10 +303,16 @@ def getStyleChangedImage(inputFile, preferenceImages):
 			utility.save_image(changed_image, saveOutputFile)
 		elif i < MAX_OUT_IMAGE * 1.0:
 			original_image = utility.read_image(inputFile)
+			# 특정 크기 이상이면 decrease ratio를 조절하여 1/3으로..
+			decrese_ratio = (1.0, 1.0)
+			if original_image.shape[0] * original_image.shape[1] > 600 * 800:
+				decrese_ratio = (0.3, 0.3)
+				original_image = cv2.resize(original_image, None, fx=decrese_ratio[0], fy=decrese_ratio[1], interpolation=cv2.INTER_AREA)
 			for i in range(len(str_tag)):
 				if ( str_tag[i] == "sofa" or str_tag[i] == "chair" ):
-					styled_furniture = styler.set_color_with_image(rect_files[i], preferenceImages[now_index], None)
-					original_image = image_processing.add_up_image_to(original_image, styled_furniture, int(coord[i][0]), int(coord[i][1]), int(coord[i][2]), int(coord[i][3]))
+					styled_furniture = styler.set_color_with_image(rect_files[i], preferenceImages[now_index], None, decrese_ratio)
+					original_image = image_processing.add_up_image_to(original_image, styled_furniture, \
+						int(coord[i][0] * decrese_ratio[0]), int(coord[i][1] * decrese_ratio[0]), int(coord[i][2] * decrese_ratio[0]), int(coord[i][3] * decrese_ratio[0]))
 			utility.save_image(original_image, saveOutputFile)
 		else:
 			original_image = utility.read_image(inputFile)
@@ -321,8 +327,6 @@ def getStyleChangedImage(inputFile, preferenceImages):
 	print(MAX_OUT_IMAGE)
 
 if __name__ == "__main__":
-	getStyleChangedImage("Image/Interior/interior7.jpg", utility.get_filenames("Image/InteriorImage/test/label1"))
-
 	if len(sys.argv) == 1:
 		exit()
 	func = sys.argv[1]

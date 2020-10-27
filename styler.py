@@ -32,14 +32,16 @@ def set_color_with_color(content_image_name, stlye_color, a=5, b=1, change_style
 
 	return styled_image
 
-def set_color_with_image(input_file, color_file, mask_map):
+def set_color_with_image(input_file, color_file, mask_map, decrease_ratio=(0.1, 0.1)):
 	source = utility.read_image(input_file)
 	source = cv2.cvtColor(source, cv2.COLOR_BGR2LAB)
+	(h, w, _) = source.shape
+	source = cv2.resize(source, None, fx=decrease_ratio[0], fy=decrease_ratio[1], interpolation=cv2.INTER_AREA)
+
 	target = utility.read_image(color_file)
 	target = cv2.cvtColor(target, cv2.COLOR_BGR2LAB)
 	(h, w, _) = target.shape
-	if h * w > 480000:
-		target = cv2.resize(target, None, fx=0.1, fy=0.1, interpolation=cv2.INTER_AREA)
+	target = cv2.resize(target, None, fx=decrease_ratio[0], fy=decrease_ratio[1], interpolation=cv2.INTER_AREA)
 	
 	s_mean, s_std = image_processing.get_mean_and_std(source)
 	t_mean, t_std = image_processing.get_mean_and_std(target)
@@ -55,6 +57,9 @@ def set_color_with_image(input_file, color_file, mask_map):
 				source[h, w, c] = utility.check_bound(round(x))
 
 	original_image = utility.read_image(input_file)
+	(h, w, _) = original_image.shape
+	original_image = cv2.resize(original_image, None, fx=decrease_ratio[0], fy=decrease_ratio[1], interpolation=cv2.INTER_AREA)
+	
 	all_class_total = []
 	if mask_map == None:
 		for h in range(len(original_image)):
