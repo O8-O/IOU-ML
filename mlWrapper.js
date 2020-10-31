@@ -1,11 +1,12 @@
 const { PythonShell } = require("python-shell");
 
-class MlWrapper {
+module.exports =  class MlWrapper {
 	constructor() { }
 
 	runner(options) {
 		return new Promise((res, rej) => {
-			PythonShell.run("mlWrapper.py", options, (err, data) => {
+			PythonShell.run("C:/workspace/IOU-Backend/util/IOU-ML/mlWrapper.py", options, (err, data) => {
+				console.log(data);
 				if(err != null)	 rej(err);
 				else  res(data);
 			})
@@ -79,17 +80,23 @@ class MlWrapper {
 		// inputFile : 사용자가 올린 파일.
 		// userPreferenceImage : 사용자가 좋아하는 파일 List.
 		var arrayOption = ["getStyleChangedImage", inputFile]
-		for(var i = 0; i < userPreferenceImage.length; i++) {
-			arrayOption.push(userPreferenceImage[i])
+		if(typeof userPreferenceImage == typeof "") {
+			arrayOption.push(userPreferenceImage)
+		}
+		else {
+			for(var i = 0; i < userPreferenceImage.length; i++) {
+				arrayOption.push(userPreferenceImage[i])
+			}
 		}
 		var options = {args : arrayOption};
 		return this.runner(options);
 	}
 }
 
-/* 사용 예시 */
+/*
+// 사용 예시 
 ml = new MlWrapper();
-ml.getStyleChangedImage("Image/Interior/interior7.jpg", [""]).then(
+ml.getStyleChangedImage("C:\\workspace\\IOU-Backend\\upload\\2020-10-27T14-20-32.598Zinterior7.jpg", "").then(
 	(data)=> {
 		console.log(data);
 		console.log("Success!");
@@ -98,4 +105,4 @@ ml.getStyleChangedImage("Image/Interior/interior7.jpg", [""]).then(
 		console.log(err);
 		console.log("Fail!");
 	}
-);
+);*/

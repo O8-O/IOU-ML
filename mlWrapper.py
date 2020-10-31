@@ -282,11 +282,24 @@ def getStyleChangedImage(inputFile, preferenceImages, tempdata="temp"):
 		3-2. 원래의 인테리어 가구를 사용자가 좋아할만한 가구로 변경한다. ( 모든 sofa, chair에 대해서 color filter 적용한걸로 ) -> 40%
 		3-3. 원래의 인테리어에서 색상 filter만 입혀준다. ( 위의 0.2 부분 )
 	'''
+	if "\\" in inputFile:
+		dirs = inputFile.split("\\")
+		inputFile = ""
+		for d in dirs[:-1]:
+			inputFile += d + "/"
+		inputFile += dirs[-1]
 	outputFile = utility.get_add_dir(inputFile, tempdata)
 	# fav_furniture_list = "Image/InteriorImage/test_furniture/sofa"
 	# fav_furniture_list = utility.get_filenames(fav_furniture_list)
 	# 기존 Data 출력.
-	[coord, str_tag, number_tag, score, rect_files, additional_infor, n_color] = utility.get_od_data(inputFile)
+	base_name = inputFile.split("/")[-1].split("Z")[-1]
+	researched_files = utility.get_only_jpg_files("C:/workspace/IOU-Backend/util/IOU-ML/Image/InteriorImage/test")
+	checked_file = ""	
+	for rf in researched_files:
+		if base_name in rf:
+			checked_file = rf
+	
+	[coord, str_tag, number_tag, score, rect_files, additional_infor, n_color] = utility.get_od_data(checked_file)
 	'''
 	segment_data = []
 	for f in rect_files:
@@ -295,13 +308,14 @@ def getStyleChangedImage(inputFile, preferenceImages, tempdata="temp"):
 	for f in fav_furniture_list:
 		fav_furniture_seg_data.append(utility.get_segment_data(f))
 	'''
+	print()
 	for i in range(MAX_OUT_IMAGE):
 		now_index = random.randint(0, len(preferenceImages) - 1)
 		saveOutputFile = utility.add_name(outputFile, "_" + str(i))
 		if i < MAX_OUT_IMAGE * 0.2:
 			original_image = utility.read_image(inputFile)
 			decrese_ratio = (1.0, 1.0)
-			if original_image.shape[0] * original_image.shape[1] > 600 * 800:
+			if original_image.shape[0] * original_image.shape[1] > 1200 * 960:
 				decrese_ratio = (0.3, 0.3)
 			changed_image = styler.set_color_with_image(inputFile, preferenceImages[now_index], mask_map=None)
 			utility.save_image(changed_image, saveOutputFile)
@@ -309,12 +323,12 @@ def getStyleChangedImage(inputFile, preferenceImages, tempdata="temp"):
 			original_image = utility.read_image(inputFile)
 			# 특정 크기 이상이면 decrease ratio를 조절하여 1/3으로..
 			decrese_ratio = (1.0, 1.0)
-			if original_image.shape[0] * original_image.shape[1] > 600 * 800:
+			if original_image.shape[0] * original_image.shape[1] > 1200 * 960:
 				decrese_ratio = (0.3, 0.3)
 				original_image = cv2.resize(original_image, None, fx=decrese_ratio[0], fy=decrese_ratio[1], interpolation=cv2.INTER_AREA)
 			for i in range(len(str_tag)):
 				if ( str_tag[i] == "sofa" or str_tag[i] == "chair" ):
-					styled_furniture = styler.set_color_with_image(rect_files[i], preferenceImages[now_index], None, decrese_ratio)
+					styled_furniture = styler.set_color_with_image("C:/workspace/IOU-Backend/util/IOU-ML/" + rect_files[i], preferenceImages[now_index], None, decrese_ratio)
 					original_image = image_processing.add_up_image_to(original_image, styled_furniture, \
 						int(coord[i][0] * decrese_ratio[0]), int(coord[i][1] * decrese_ratio[0]), int(coord[i][2] * decrese_ratio[0]), int(coord[i][3] * decrese_ratio[0]))
 			utility.save_image(original_image, saveOutputFile)
@@ -322,7 +336,7 @@ def getStyleChangedImage(inputFile, preferenceImages, tempdata="temp"):
 			original_image = utility.read_image(inputFile)
 			for i in range(len(str_tag)):
 				if ( str_tag[i] == "sofa" or str_tag[i] == "chair" ):
-					stylized_image = styler.set_style(rect_files[i], preferenceImages[now_index])
+					stylized_image = styler.set_style("C:/workspace/IOU-Backend/util/IOU-ML/" + rect_files[i], preferenceImages[now_index])
 					stylized_image = np.array((stylized_image * 255)[0], np.uint8)
 					styled_furniture = cv2.cvtColor(stylized_image, cv2.COLOR_BGR2RGB)
 					original_image = image_processing.add_up_image_to(original_image, styled_furniture, int(coord[i][0]), int(coord[i][1]), int(coord[i][2]), int(coord[i][3]))
@@ -379,17 +393,20 @@ if __name__ == "__main__":
 		label = [0, 0, 0, 0]
 		label_file = ["label0", "label1", "label2", "label3"]
 
-		# 어느 라벨에 속하는지 검사.
-		for i in range(1, len(options)):
-			base_file = options[i].split("/")[-1]
-			for i in range(len(label_data)):
-				if base_file in label_data[i]:
-					label[i] += 1
-		
-		max_index = 0
-		for i in range(len(label)):
-			if label[i] > label[max_index]:
-				max_index = i
+		if len(options) == 2 and len(options[1]) == 0:
+			max_index = 0
+		else:
+			# 어느 라벨에 속하는지 검사.
+			for i in range(1, len(options)):
+				base_file = options[i].split("/")[-1]
+				for i in range(len(label_data)):
+					if base_file in label_data[i]:
+						label[i] += 1
+			
+			max_index = 0
+			for i in range(len(label)):
+				if label[i] > label[max_index]:
+					max_index = i
 
 		# 해당 라벨에 속하는 file로 image를 처리.
-		getStyleChangedImage(options[0], utility.get_filenames("Image/InteriorImage/test/" + label_file[max_index]))
+		getStyleChangedImage(options[0], utility.get_filenames("C:/workspace/IOU-Backend/util/IOU-ML/Image/InteriorImage/test/" + label_file[max_index]))

@@ -406,8 +406,15 @@ def save_image(image_data, file_name):
 	cv2.imwrite(file_name, image_data)
 
 def add_name(input_file, addition, extension=None):
-	file_extension = ("." + input_file.split(".")[1]) if extension == None else ("." + extension)
-	file_base_name = input_file.split(".")[0] 
+	dot_split = input_file.split(".")
+	file_extension = ("." + dot_split[-1]) if extension == None else ("." + extension)
+	file_base_name = ""
+	if len(dot_split) > 2:
+		for i in range(len(dot_split) - 1):
+			file_base_name += dot_split[i] + "."
+		file_base_name = file_base_name[:-1]
+	else:
+		file_base_name = input_file.split(".")[0] 
 	return file_base_name + addition + file_extension
 
 def get_add_dir(src, add_dir):
@@ -443,7 +450,7 @@ def get_segment_data(image):
 	else:
 		return None
 
-def get_label_files(label_loc="Image/InteriorImage/test/"):
+def get_label_files(label_loc="C:/workspace/IOU-Backend/util/IOU-ML/Image/InteriorImage/test/"):
 	label_data = []
 	for label_folder in ["label0", "label1", "label2", "label3"]:
 		files = get_filenames(label_loc + label_folder)
@@ -452,3 +459,11 @@ def get_label_files(label_loc="Image/InteriorImage/test/"):
 			label_data[-1].append(f.split("/")[-1])
 			
 	return label_data
+
+def get_only_jpg_files(get_dir):
+	files = get_filenames(get_dir)
+	ret_dir = []
+	for f in files:
+		if ".jpg" in f:
+			ret_dir.append(f)
+	return ret_dir
