@@ -13,6 +13,8 @@ from utility import coord_to_image
 
 MAX_OUT_IMAGE = 8
 MAX_CHANGE_COLOR = 3
+FILE_QUEUE = "fileQueue.txt"
+functionList = ["getStyleChangedImage"]
 
 def segment(inputFile, outputFile, outputDataFile) :
 	'''
@@ -344,11 +346,26 @@ def getStyleChangedImage(inputFile, preferenceImages, tempdata="temp"):
 		print(saveOutputFile)
 	print(MAX_OUT_IMAGE)
 
-if __name__ == "__main__":
-	if len(sys.argv) == 1:
-		exit()
-	func = sys.argv[1]
-	options = sys.argv[2:]
+def checkInput():
+	with open(FILE_QUEUE, 'r') as f:
+		lines = f.readline()
+	
+	# 파일 비우기
+	f = open(FILE_QUEUE, 'w')
+	f.close()
+
+	global functionList
+	functionIndex = 0
+	i = 1
+	while i < len(lines):
+		while lines[i] not in functionList and i < len(lines):
+			i += 1
+		doJob(lines[functionIndex:i])
+		functionIndex = i
+		
+def doJob(argv):			
+	func = argv[0]
+	options = argv[1:]
 	if func == "segment":
 		option_check(options, 3)
 		segment(options[0], options[1], options[2])
@@ -410,3 +427,9 @@ if __name__ == "__main__":
 
 		# 해당 라벨에 속하는 file로 image를 처리.
 		getStyleChangedImage(options[0], utility.get_filenames("C:/workspace/IOU-Backend/util/IOU-ML/Image/InteriorImage/test/" + label_file[max_index]))
+
+if __name__ == "__main__":
+	# Load ML Module and Read / Do ML Job
+	if len(sys.argv) == 1:
+		exit()
+	
