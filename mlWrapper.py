@@ -6,15 +6,17 @@ import utility
 import objectDetector
 import random
 import cv2
-import sys
+import time
 import numpy as np
 
 from utility import coord_to_image
 
 MAX_OUT_IMAGE = 8
 MAX_CHANGE_COLOR = 3
-FILE_QUEUE = "fileQueue.txt"
+FILE_INQUEUE = "fileQueue.txt"
+FILE_OUTQUEUE = "fileOutQueue.txt"
 functionList = ["getStyleChangedImage"]
+detection_model = None
 
 def segment(inputFile, outputFile, outputDataFile) :
 	'''
@@ -178,9 +180,6 @@ def objectDetect(inputFile, outputFile) :
 	현재는 bin file로만 입출력이 가능.
 	폴더를 입력하면 outputFile은 무시됨.
 	'''
-	# Model name 1 mean dataset`s folder 1.
-	model_name = '1'
-	detection_model = objectDetector.load_model(model_name)
 	if "." not in inputFile:
 		# File is directory
 		files = utility.get_filenames(inputFile)
@@ -310,7 +309,7 @@ def getStyleChangedImage(inputFile, preferenceImages, tempdata="temp"):
 	for f in fav_furniture_list:
 		fav_furniture_seg_data.append(utility.get_segment_data(f))
 	'''
-	print()
+	returnImageList = []
 	for i in range(MAX_OUT_IMAGE):
 		now_index = random.randint(0, len(preferenceImages) - 1)
 		saveOutputFile = utility.add_name(outputFile, "_" + str(i))
@@ -343,15 +342,16 @@ def getStyleChangedImage(inputFile, preferenceImages, tempdata="temp"):
 					styled_furniture = cv2.cvtColor(stylized_image, cv2.COLOR_BGR2RGB)
 					original_image = image_processing.add_up_image_to(original_image, styled_furniture, int(coord[i][0]), int(coord[i][1]), int(coord[i][2]), int(coord[i][3]))
 			utility.save_image(original_image, saveOutputFile)
-		print(saveOutputFile)
-	print(MAX_OUT_IMAGE)
+		returnImageList.append(saveOutputFile)
+	returnImageList.append(MAX_OUT_IMAGE)
+	return returnImageList
 
 def checkInput():
-	with open(FILE_QUEUE, 'r') as f:
+	with open(FILE_INQUEUE, 'r') as f:
 		lines = f.readline()
 	
 	# 파일 비우기
-	f = open(FILE_QUEUE, 'w')
+	f = open(FILE_INQUEUE, 'w')
 	f.close()
 
 	global functionList
@@ -360,7 +360,14 @@ def checkInput():
 	while i < len(lines):
 		while lines[i] not in functionList and i < len(lines):
 			i += 1
-		doJob(lines[functionIndex:i])
+		output = doJob(lines[functionIndex:i])
+		# Write Output Data.
+		if output != None:
+			with open(FILE_OUTQUEUE, 'a') as f:
+				f.write("__DIV__\n")
+				for out in output:
+					f.write(str(out) + "\n")
+		
 		functionIndex = i
 		
 def doJob(argv):			
@@ -426,10 +433,20 @@ def doJob(argv):
 					max_index = i
 
 		# 해당 라벨에 속하는 file로 image를 처리.
-		getStyleChangedImage(options[0], utility.get_filenames("C:/workspace/IOU-Backend/util/IOU-ML/Image/InteriorImage/test/" + label_file[max_index]))
+		return getStyleChangedImage(options[0], utility.get_filenames("C:/workspace/IOU-Backend/util/IOU-ML/Image/InteriorImage/test/" + label_file[max_index]))
 
 if __name__ == "__main__":
-	# Load ML Module and Read / Do ML Job
-	if len(sys.argv) == 1:
-		exit()
-	
+	# Load ML Module and Read - Do ML Job
+	# Model name 1 mean dataset`s folder 1.
+	model_name = '1'
+	detection_model = objectDetector.load_model(model_name)
+
+	print("Load Module Finished. Now can scheduling.")
+	# Scheduler for readFile.
+	while True:
+		nowTime = time.time()
+		# 매 2초 혹은 7초마다 5초마다 검사한다.
+		if nowTime % 10 == 2 or nowTime % 10 == 7:
+			checkInput()
+		else:
+			time.sleep(1)	# 1초간 휴식
