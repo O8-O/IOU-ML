@@ -180,7 +180,6 @@ def mergeGroup(classTotal, classNumber, dividedClass, totalClass, nowIndex):
         eraseList = []
     return retClassTotal, retClassNumber, dividedClass
     
-
 def findIndex(classTotal, coord):
     for ct in range(0, len(classTotal)):
         if coord in classTotal[ct]:
