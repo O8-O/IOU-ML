@@ -474,6 +474,36 @@ def find_border_k_tf_map(tf_map, coord, width, height, n=5, k=4, hard_check=Fals
 			border_point.append(c)
 	return border_point
 
+def is_coord_border_simplify(tf_map, coord, width, height, n, k, hard_check):
+	'''
+	주어진 coord 좌표가 한 contours의 외곽인지 ( 따라서 이어줘야 하는 것인지 ) 판별 하는 함수.
+	'''
+	count = 0
+	for diff in [(0, 1), (0, -1), (1,0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)]:
+		if utility.can_go(coord[0], coord[1], width, height, x_diff=diff[0], y_diff=diff[1]):
+			count += 1
+	if count < 2:
+		return True
+	lu = 0
+	ru = 0
+	ld = 0
+	rd = 0
+	for y_diff in range(-1 * n, n):
+		for x_diff in range(-1 * n, n):
+			if utility.can_go(coord[0], coord[1], width, height, x_diff=x_diff, y_diff=y_diff):
+				if tf_map[coord[1] + y_diff][coord[0] + x_diff]:
+					if y_diff > 0:
+						if x_diff > 0:
+							rd += 1
+						else:
+							ld += 1
+					else:
+						if x_diff > 0:
+							ru += 1
+						else:
+							lu += 1
+	return abs(rd - ld) > k and abs(ru - lu) > k and abs(ru - rd) > k and abs(lu - ld) > k
+
 def is_coord_border(tf_map, coord, width, height, n, k, hard_check=False):
 	'''
 	주어진 coord 좌표가 한 contours의 외곽인지 ( 따라서 이어줘야 하는 것인지 ) 판별 하는 함수.

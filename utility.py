@@ -5,6 +5,9 @@ import pickle
 import os
 import matplotlib.pyplot as plt
 import tensorflow as tf
+import shutil
+
+from tensorflow.python.eager.context import internal_operation_seed
 
 dir_x = [0, 0, 1, -1]
 dir_y = [1, -1, 0, 0]
@@ -115,6 +118,30 @@ def get_remarkable_color(color_list, color_threshold, convert_rgb=False):
 		for j in range(color_length):
 			if color_close[now_index][j]:
 				selected_index[j] = True
+	if convert_rgb:
+		result_color = [cv2.cvtColor(np.array([[result_color[i]]], dtype="uint8"), cv2.COLOR_BGR2RGB).tolist()[0][0] for i in range(len(result_color))]
+	return result_color
+
+def get_remarkable_color_n(color_list, n, convert_rgb=False):
+	color_length = len(color_list)
+	lab_color_list = [cv2.cvtColor(np.array([[color_list[i]]], dtype="uint8"), cv2.COLOR_BGR2Lab).tolist()[0][0] for i in range(color_length)]
+
+	color_distance = get_color_distance_map(lab_color_list, color_length)
+	color_far_map = [0 for _ in range(color_length)]
+	
+	for i in range(color_length):
+		for j in range(color_length):
+			color_far_map[i] += color_distance[i][j]
+	
+	sorted_color_far = []
+	for i in range(color_length):
+		sorted_color_far.append((color_far_map[i], i))
+	sorted_color_far.sort()
+
+	result_color = []
+	for i in range(n):
+		result_color.append(color_list[i])
+		
 	if convert_rgb:
 		result_color = [cv2.cvtColor(np.array([[result_color[i]]], dtype="uint8"), cv2.COLOR_BGR2RGB).tolist()[0][0] for i in range(len(result_color))]
 	return result_color
@@ -263,6 +290,18 @@ def get_class_crop_image(image, coord, width, height):
 				crop_image[h - y_min][w - x_min] = [0, 0, 0]
 	return crop_image
 
+# Object Detector
+def tag_classifier(input_class):
+	# Get only our interested feature.
+	class_number = [15, 33, 44, 46, 47, 48, 49, 50, 51, 58, 62, 63, 64, 65, 67, 70, 72, 73, 74, 75, 76, 78, 79, 80, 81, 82, 84, 85, 86, 89]
+	class_tag = ["bench", "suitcase", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "table", "chair", "couch", "potted plant", \
+		"bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "microwave", "oven", "toaster", "sink", "refrigerator", "book", \
+		"clock", "vase", "hair drier"]
+	if input_class in class_number:
+		return class_tag[class_number.index(input_class)]
+	else:
+		return None
+
 # Real Utility.
 def calc_space_with_given_coord(class_number, class_total, given_coord):
 	'''
@@ -366,11 +405,65 @@ def read_image(image_file):
 def save_image(image_data, file_name):
 	cv2.imwrite(file_name, image_data)
 
-if __name__ == "__main__":
-	p1 = [205, 203, 202] # #CDCBCA ( 의자 등받이 부분 )
-	p2 = [217, 217, 219] # #D9D9DB ( 의자 바닥 부분 )
+def add_name(input_file, addition, extension=None):
+	dot_split = input_file.split(".")
+	file_extension = ("." + dot_split[-1]) if extension == None else ("." + extension)
+	file_base_name = ""
+	if len(dot_split) > 2:
+		for i in range(len(dot_split) - 1):
+			file_base_name += dot_split[i] + "."
+		file_base_name = file_base_name[:-1]
+	else:
+		file_base_name = input_file.split(".")[0] 
+	return file_base_name + addition + file_extension
 
-	class_color = [[205, 203, 202], [90, 92, 105], [217, 217, 219], [172, 166, 153], [194, 181, 160], [92, 63, 43]]
-	print(get_color_distance_map(class_color, len(class_color)))
-	print(get_color_distance_map(class_color, len(class_color), distance_func=get_rgb_distance))
+def get_add_dir(src, add_dir):
+	'''
+	src 는 디렉토리 + 파일 의 형태
+	'''
+	dest = ""
+
+	dirs = src.split("/")
+	for d in dirs[:-1]:
+		dest += d + "/"
 	
+	dest += add_dir + "/"
+	dest += dirs[-1]
+	return dest
+
+def move_into(image_file, to):
+	shutil.copyfile(image_file, get_add_dir(image_file, to))
+
+def get_od_data(interior_file):
+	# coord, str_tag, number_tag, score, rect_files, additional_infor, n_color]
+	od_file = add_name(interior_file, "_od", extension="bin")
+	if is_exist(od_file):
+		return load_result(od_file)
+	else:
+		return None
+
+def get_segment_data(image):
+	# [divided_class, class_number, class_total, class_border]
+	sg_file = image.split(".")[0] + ".bin"
+	if is_exist(sg_file):
+		return load_result(sg_file)
+	else:
+		return None
+
+def get_label_files(label_loc="C:/workspace/IOU-Backend/util/IOU-ML/Image/InteriorImage/test/"):
+	label_data = []
+	for label_folder in ["label0", "label1", "label2", "label3"]:
+		files = get_filenames(label_loc + label_folder)
+		label_data.append([])
+		for f in files:
+			label_data[-1].append(f.split("/")[-1])
+			
+	return label_data
+
+def get_only_jpg_files(get_dir):
+	files = get_filenames(get_dir)
+	ret_dir = []
+	for f in files:
+		if ".jpg" in f:
+			ret_dir.append(f)
+	return ret_dir

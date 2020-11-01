@@ -1,19 +1,13 @@
 import multiprocessing as mp
 import matrix_processing
 import image_processing
-from matrix_processing import contours_to_coord
 import utility
-import sys
 
 from detectron2.config import get_cfg
 from detectron2.data.detection_utils import read_image
 
 from modules.predictor import VisualizationDemo
-from utility import divided_class_into_image
 
-# constants
-WINDOW_NAME = "IOU Segmentation"
-FILE_NAME = 1
 def setup_cfg(args):
 	# load config from file and command-line arguments
 	cfg = get_cfg()
@@ -79,7 +73,7 @@ def merge_divided_group(divided_class, class_numbers, class_total, class_border,
 	ret_class_total = []
 	ret_class_border = []
 	ret_class_count = []
-	merge_base_index = merge_group_index[0]
+	merge_base_index = merge_group_index[0] if merge_group_index[0] < merge_group_index[1] else merge_group_index[1]
 	
 	for i in range(class_num):
 		if not(i in merge_group_index and i != merge_base_index):
@@ -208,13 +202,20 @@ def get_segmented_image(inputFile):
 
 	return get_mask(args_list[1], cfg)
 
-	
-
 def get_divided_class(inputFile, clipLimit=16.0, tileGridSize=(16, 16), start=60, diff=150, delete_line_n=20, border_n=6, border_k=2, merge_min_value=180, sim_score=30, merge_mode_color=False):
 	'''
 	predict masking image and get divided_class.
 	'''
-	largest_mask, _, mask_map, (width, height) = get_segmented_image(inputFile)
+	try:
+		largest_mask, largest_index, mask_map, (width, height) = get_segmented_image(inputFile)
+	except RuntimeError:
+		largest_index = -1
+	# 만약 Detectron이 감지하지 못한경우
+	if largest_index == -1:
+		largest_mask = utility.read_image(inputFile)
+		(height, width, _) = largest_mask.shape
+		mask_map = [[True for _ in range(width)] for _ in range(height)]
+
 	# 잘린 이미지를 통해 외곽선을 얻어서 진행.
 	contours, _ = image_processing.get_contours(largest_mask, clipLimit=clipLimit, tileGridSize=tileGridSize, start=start, diff=diff)
 	coords = matrix_processing.contours_to_coord(contours)
@@ -336,3 +337,9 @@ def divided_into_classed_color_based(image, divided_class, class_total, class_nu
 	class_border = [matrix_processing.check_border(divided_class, class_total_divided[i], width, height) for i in range(len(class_number))]
 	class_count = [len(class_total_divided[i]) for i in range(len(class_number))]
 	return class_number, class_total_divided, class_border, class_count
+
+if __name__ == "__main__":
+	divided_class, class_number, class_total, class_border, class_count, class_length, class_color, largest_mask, width, height = \
+		get_divided_class("Image/chair1.jpg")
+	dc_image = utility.divided_class_into_image(divided_class, class_number, class_color, width, height, class_number)
+	utility.print_image(dc_image)

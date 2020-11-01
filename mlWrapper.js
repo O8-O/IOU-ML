@@ -1,11 +1,12 @@
 const { PythonShell } = require("python-shell");
 
-class MlWrapper {
+module.exports =  class MlWrapper {
 	constructor() { }
 
 	runner(options) {
 		return new Promise((res, rej) => {
-			PythonShell.run("mlWrapper.py", options, (err, data) => {
+			PythonShell.run("C:/workspace/IOU-Backend/util/IOU-ML/mlWrapper.py", options, (err, data) => {
+				console.log(data);
 				if(err != null)	 rej(err);
 				else  res(data);
 			})
@@ -74,29 +75,34 @@ class MlWrapper {
 		var options = {args : ["analysisInteriorParameter", inputFile, outputFile, outputDataFile]};
 		return this.runner(options);
 	}
+
+	getStyleChangedImage(inputFile, userPreferenceImage) {
+		// inputFile : 사용자가 올린 파일.
+		// userPreferenceImage : 사용자가 좋아하는 파일 List.
+		var arrayOption = ["getStyleChangedImage", inputFile]
+		if(typeof userPreferenceImage == typeof "") {
+			arrayOption.push(userPreferenceImage)
+		}
+		else {
+			for(var i = 0; i < userPreferenceImage.length; i++) {
+				arrayOption.push(userPreferenceImage[i])
+			}
+		}
+		var options = {args : arrayOption};
+		return this.runner(options);
+	}
 }
 
-
-
-var fileName = "Image/chair1.jpg"
-var fileCheckName = "Image/chair1.bin"
-var grayscale = "Image/chair1-gray.jpg"
-var color_one_point = "Image/chair1-onePoint.jpg"
-var color_multi_point = "Image/chair1-multiPoint.jpg"
-var outputFile = "Image/chair1-divided.jpg"
-var color_dest_image = "Image/interior2.jpg"
-var color_change_with_image = "Image/chair1-image.jpg"
-var texture_file = "Image/lether_texture.jpg"
-var texture_one_point = "Image/Chair-texture-onePoint.jpg"
-var texture_multi_point = "Image/Chair-texture-multiPoint.jpg"
-var style_transfer_image = "Image/styles.jpg"
-
+/*
+// 사용 예시 
 ml = new MlWrapper();
-ml.segmentation(fileName, outputFile, fileCheckName).then(
+ml.getStyleChangedImage("C:\\workspace\\IOU-Backend\\upload\\2020-10-27T14-20-32.598Zinterior7.jpg", "").then(
 	(data)=> {
-		console.log("Success!")
+		console.log(data);
+		console.log("Success!");
 	},
 	(err)=> {
-		console.log("Fail!")
+		console.log(err);
+		console.log("Fail!");
 	}
-);
+);*/
