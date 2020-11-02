@@ -1,19 +1,13 @@
 import multiprocessing as mp
 import matrix_processing
 import image_processing
-from matrix_processing import contours_to_coord
 import utility
-import sys
 
 from detectron2.config import get_cfg
 from detectron2.data.detection_utils import read_image
 
 from modules.predictor import VisualizationDemo
-from utility import divided_class_into_image
 
-# constants
-WINDOW_NAME = "IOU Segmentation"
-FILE_NAME = 1
 def setup_cfg(args):
 	# load config from file and command-line arguments
 	cfg = get_cfg()
@@ -79,7 +73,7 @@ def merge_divided_group(divided_class, class_numbers, class_total, class_border,
 	ret_class_total = []
 	ret_class_border = []
 	ret_class_count = []
-	merge_base_index = merge_group_index[0]
+	merge_base_index = merge_group_index[0] if merge_group_index[0] < merge_group_index[1] else merge_group_index[1]
 	
 	for i in range(class_num):
 		if not(i in merge_group_index and i != merge_base_index):
@@ -181,6 +175,8 @@ def get_mask(fileName, cfg):
 	instance_number = len(predictions['instances'])
 	# Mask 칠한 이미지 중에서 가장 큰것만 가지고 진행함.
 	largest_mask = []
+	largest_mask_coord = []
+	largest_mask_map = []
 	largest_mask_number = -1
 
 	for i in range(0, instance_number):
@@ -189,26 +185,39 @@ def get_mask(fileName, cfg):
 		if mask_num > largest_mask_number:
 			largest_mask = masked_image
 			largest_mask_number = mask_num
-	return largest_mask, largest_mask_number, (width, height) 
+			largest_mask_map = mask
+		
+	return largest_mask, largest_mask_number, largest_mask_map, (width, height) 
 
-def get_divided_class(inputFile, outputFile, clipLimit=16.0, tileGridSize=(16, 16), start=60, diff=120, delete_line_n=20, border_n=6, border_k=2, merge_min_value=120, sim_score=10):
-	'''
-	predict masking image and get divided_class.
-	'''
+def get_segmented_image(inputFile):
 	mp.set_start_method("spawn", force=True)
 	args_list = [
 		"modules/configs/COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml", 
 		inputFile, 
 		0.6, 
 		["MODEL.WEIGHTS", "detectron2://COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x/137849600/model_final_f10217.pkl"],
-		outputFile
+		"no_name"
 	]
 	cfg = setup_cfg(args_list)
 
-	largest_mask, _, (width, height) = get_mask(args_list[1], cfg)
+	return get_mask(args_list[1], cfg)
+
+def get_divided_class(inputFile, clipLimit=16.0, tileGridSize=(16, 16), start=60, diff=150, delete_line_n=20, border_n=6, border_k=2, merge_min_value=180, sim_score=30, merge_mode_color=False):
+	'''
+	predict masking image and get divided_class.
+	'''
+	try:
+		largest_mask, largest_index, mask_map, (width, height) = get_segmented_image(inputFile)
+	except RuntimeError:
+		largest_index = -1
+	# 만약 Detectron이 감지하지 못한경우
+	if largest_index == -1:
+		largest_mask = utility.read_image(inputFile)
+		(height, width, _) = largest_mask.shape
+		mask_map = [[True for _ in range(width)] for _ in range(height)]
 
 	# 잘린 이미지를 통해 외곽선을 얻어서 진행.
-	contours, heirarchy = image_processing.get_contours(largest_mask, clipLimit=clipLimit, tileGridSize=tileGridSize, start=start, diff=diff)
+	contours, _ = image_processing.get_contours(largest_mask, clipLimit=clipLimit, tileGridSize=tileGridSize, start=start, diff=diff)
 	coords = matrix_processing.contours_to_coord(contours)
 
 	# 작은 Line은 삭제.
@@ -243,11 +252,43 @@ def get_divided_class(inputFile, outputFile, clipLimit=16.0, tileGridSize=(16, 1
 		class_number, class_total, class_border, class_count, class_length = \
 		merge_small_size(divided_class, class_number, class_total, class_border, class_count, width, height, min_value=min_value)
 
-	# 비슷한 색끼리도 모아준다.
-	class_number, class_total, class_border, class_count, class_length, class_color = \
-	merge_same_color(divided_class, class_number, class_total, class_border, class_count, largest_mask, width, height, sim_score=sim_score)
+	# 원래 Segmentation 돤것에서 나가는 것은 삭제한다.
+	class_number, class_total, class_border, class_count, class_length = \
+	out_mask_delete(mask_map, class_number, class_total, class_border, class_count, class_length, out_pixel_threshold=0)
+
+	class_color = image_processing.get_class_color(largest_mask, class_total, class_count)
+	if merge_mode_color:
+		# 비슷한 색끼리도 모아준다.
+		class_number, class_total, class_border, class_count, class_length, class_color = \
+		merge_same_color(divided_class, class_number, class_total, class_border, class_count, largest_mask, width, height, sim_score=sim_score)
 	
 	return divided_class, class_number, class_total, class_border, class_count, class_length, class_color, largest_mask, width, height
+
+def out_mask_delete(mask_map, class_number, class_total, class_border, class_count, class_length, out_pixel_threshold=0):
+	ret_class_number = []
+	ret_class_total = []
+	ret_class_border = []
+	ret_class_count = []
+	
+	for i in range(class_length):
+		pass_flag = True
+		out_pixel_num = 0
+
+		for coord in class_total[i]:
+			if not mask_map[coord[1]][coord[0]]:
+				if out_pixel_num < out_pixel_threshold:
+					out_pixel_num += 1
+					continue
+				pass_flag = False
+				break
+
+		if pass_flag:
+			ret_class_number.append(class_number[i])
+			ret_class_total.append(class_total[i])
+			ret_class_border.append(class_border[i])
+			ret_class_count.append(class_count[i])
+			
+	return ret_class_number, ret_class_total, ret_class_border, ret_class_count, len(ret_class_total)
 
 def divided_into_classed_color_based(image, divided_class, class_total, class_number_max, width, height, div_threshold=60):
 	'''
@@ -296,36 +337,9 @@ def divided_into_classed_color_based(image, divided_class, class_total, class_nu
 	class_border = [matrix_processing.check_border(divided_class, class_total_divided[i], width, height) for i in range(len(class_number))]
 	class_count = [len(class_total_divided[i]) for i in range(len(class_number))]
 	return class_number, class_total_divided, class_border, class_count
-	
+
 if __name__ == "__main__":
-	'''
-	Usage : 
-		-i input_fileName_with_path
-		-o output_fileName_with_path
-		-s segment_fileName_with_path
-	'''
-	argvList = sys.argv
 	divided_class, class_number, class_total, class_border, class_count, class_length, class_color, largest_mask, width, height = \
-		get_divided_class("Image/Chair1.jpg", "chair1_masked.jpg", start=60, diff=150, merge_min_value=180, sim_score=30)
+		get_divided_class("Image/chair1.jpg")
 	dc_image = utility.divided_class_into_image(divided_class, class_number, class_color, width, height, class_number)
 	utility.print_image(dc_image)
-	
-	'''
-	# 일정 크기보다 작은 면적들은 근처에 뭐가 제일 많은지 체크해서 통합시킨다.
-	# chair1
-	printing_class = utility.calc_space_with_given_coord(class_number, class_total, \
-		[(523, 64), (491, 190), (352, 162), (318, 173), (301, 163), (264, 352), (255, 412), \
-			(358, 136), (380, 129), (399, 137), (404, 166), (429, 154), (338, 354), (254, 411), \
-			(279, 216), (265, 297), (271, 323), (285, 375), (253, 378), (250, 435), (245, 470), \
-			(236, 532), (140, 371), (42, 367), (41, 299), (130, 293), (311, 251), (44, 211), \
-			(140, 138), (285, 151), (270, 176), (313, 225), (359, 196), (243, 333), (227, 333)])
-
-	# Sofa 1
-	printing_class = utility.calc_space_with_given_coord(class_number, class_total, [(185, 57), (252, 15), (46, 99)])
-	
-	
-	dc_image = utility.divided_class_into_image(divided_class, class_number, class_color, width, height, class_number)
-	dri_image = utility.divided_class_into_real_image(divided_class, largest_mask, width, height, printing_class)
-
-	utility.show_with_plt([dc_image, dri_image])
-	'''

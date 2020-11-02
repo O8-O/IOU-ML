@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from numpy.lib import utils
 from sklearn.cluster import KMeans
 
 def get_only_instance_image(input_file, mask, width, height, show=False):
@@ -73,7 +74,7 @@ def get_class_color(image, class_total, class_count, color_function=get_average_
 	return class_color
 
 def add_up_image(original_image, add_image, add_coord, width, height):
-	output_image = np.zeros([height, width ,3], dtype=np.uint8)
+	output_image = np.zeros([height, width, 3], dtype=np.uint8)
 	for h in range(height):
 		for w in range(width):
 			output_image[h][w] = original_image[h][w]
@@ -81,12 +82,11 @@ def add_up_image(original_image, add_image, add_coord, width, height):
 		output_image[coord[1]][coord[0]] = add_image[coord[1]][coord[0]]
 	return output_image
 
-def get_dominant_color(image, clusters=10):
+def get_dominant_color(image, clusters=20):
 	'''
 	get image 2d np.array and get dominant color with clusters number.
 	'''
-	#convert to rgb from bgr
-	img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+	img = cv2.imread(image)
 			
 	#reshaping to a list of pixels
 	img = img.reshape((img.shape[0] * img.shape[1], 3))
@@ -99,3 +99,80 @@ def get_dominant_color(image, clusters=10):
 	colors = kmeans.cluster_centers_
 	
 	return colors.astype(int).tolist()
+
+def add_up_image_to(image, add_image, min_x, max_x, min_y, max_y):
+	(add_h, add_w, _) = add_image.shape
+	(original_h, original_w, _) = image.shape
+	width = max_x - min_x
+	height = max_y - min_y
+	
+	if add_h * add_w > width * height:
+		resize_add_image = cv2.resize(add_image, (width, height), interpolation=cv2.INTER_AREA)
+	else:
+		resize_add_image = cv2.resize(add_image, (width, height), interpolation=cv2.INTER_CUBIC)
+	
+	output_image = np.zeros(image.shape, dtype=np.uint8)
+	for y in range(original_h):
+		for x in range(original_w):
+			output_image[y][x] = image[y][x]
+			
+	for y in range(min_y, max_y):
+		for x in range(min_x, max_x):
+			output_image[y][x] = resize_add_image[y - min_y][x - min_x]
+	
+	return output_image
+
+# Styler
+def get_mean_and_std(x):
+	x_mean, x_std = cv2.meanStdDev(x)
+	x_mean = np.hstack(np.around(x_mean, 2))
+	x_std = np.hstack(np.around(x_std, 2))
+	return x_mean, x_std
+
+def get_gray_scale(color):
+	'''
+	입력 Color의 GrayScale 된 값을 Return.
+	color : BGR Color.
+	'''
+	gray_color = 0
+	gray_parameter = [0.1140, 0.5870, 0.2989]
+
+	for i in range(3):
+		gray_color += gray_parameter[i] * color[i]
+	
+	return gray_color
+
+def blend_color(color1, color2, change_style="median", a=1, b=1):
+	'''
+	change_style 은 median, gray_scaler 가 있다.
+	a 와 b 는 각각 color1 과 color2 의 가중치 비율. a 가 늘어나면 color1 이 늘어나고, 반대는 반대!
+	'''
+	b_color = np.zeros([3], dtype=np.uint8)
+	if change_style == "median":
+		# 두 Color의 평균을 사용하는 방법.
+		for i in range(3):
+			b_color[i] = int((color1[i] * a + color2[i] * b) / (a + b))
+		return b_color
+	else:
+		# Grayscale을 사용하는 방법. 이 방법은 가중치를 사용하지 않는다.
+		gray_value = get_gray_scale(color1)
+		for i in range(3):
+			b_color[i] = int(color2[i] * ( gray_value / 255 ))
+	return b_color
+
+def to_gray_scale(image):
+	image_arr = cv2.imread(image)
+	return cv2.cvtColor(image_arr, cv2.COLOR_BGR2GRAY)
+
+# Object Detector
+def get_rect_image(f, x_min, x_max, y_min, y_max):
+	# 지정된 max to min의 사각형 이미지를 얻어낸다.
+	width = x_max - x_min
+	height = y_max - y_min
+	image = cv2.imread(f)
+	output_image = np.zeros([height, width, 3], dtype=np.uint8)
+	
+	for y in range(y_min, y_max):
+		for x in range(x_min, x_max):
+			output_image[y - y_min][x - x_min] = image[y][x]
+	return output_image
