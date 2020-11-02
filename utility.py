@@ -450,6 +450,13 @@ def get_segment_data(image):
 	else:
 		return None
 
+def get_base_name(fileName):
+	'''
+	get file base name did not contain day or etc.
+	ex ) /~/~/2020-10-27T15-21-32.684Zinterior7.jpg -> interior7
+	'''
+	return fileName.spilt("Z")[-1].split(".")[0]
+
 def get_label_files(label_loc="C:/workspace/IOU-Backend/util/IOU-ML/Image/InteriorImage/test/"):
 	label_data = []
 	for label_folder in ["label0", "label1", "label2", "label3"]:

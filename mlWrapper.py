@@ -15,6 +15,8 @@ MAX_OUT_IMAGE = 8
 MAX_CHANGE_COLOR = 3
 FILE_INQUEUE = "fileQueue.txt"
 FILE_OUTQUEUE = "fileOutQueue.txt"
+COLOR_SYSTEM_FILE = "colorSystem.bin"
+RESEARCH_BASE_DIR = "C:/MLDATA"
 functionList = ["getStyleChangedImage"]
 detection_model = None
 
@@ -345,6 +347,21 @@ def getStyleChangedImage(inputFile, preferenceImages, tempdata="temp"):
 		returnImageList.append(saveOutputFile)
 	returnImageList.append(MAX_OUT_IMAGE)
 	return returnImageList
+
+def get_color_system(directory):
+	'''
+	directory 내부에 있는 모든 Color system의 목록을 조사한다. Remarkable Color로 조사한다.
+	조사한 결과는 pickle을 통해 directory에 저장해둔다.
+	'''
+	fileNames = utility.get_filenames(directory)
+	colors = []
+	baseName = []
+
+	for f in fileNames:
+		baseName.append(utility.get_base_name(f))
+		colors.append(getDominantColor(f))
+	
+	utility.save_result([baseName, colors], RESEARCH_BASE_DIR + COLOR_SYSTEM_FILE)
 
 def checkInput():
 	with open(FILE_INQUEUE, 'r') as f:
