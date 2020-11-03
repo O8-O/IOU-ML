@@ -502,7 +502,7 @@ if __name__ == "__main__":
 	'''
 	fileName = "Image/Interior/interior7/interior7_0.jpg"
 	outputFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "_divided")
-	outputDataFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "_divided", extension="bin")
+	outputDataFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "", extension="bin")
 	segment(fileName, outputFile, outputDataFile)
 	
 	'''
