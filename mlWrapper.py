@@ -8,13 +8,16 @@ import random
 import cv2
 import time
 import numpy as np
+import config
 
-from utility import coord_to_image
+from utility import coord_to_image, get_color_distance_map
 
 MAX_OUT_IMAGE = 8
 MAX_CHANGE_COLOR = 3
 FILE_INQUEUE = "fileQueue.txt"
 FILE_OUTQUEUE = "fileOutQueue.txt"
+COLOR_SYSTEM_FILE = "colorSystem.bin"
+RESEARCH_BASE_DIR = config.RESEARCH_BASE_DIR
 functionList = ["getStyleChangedImage"]
 detection_model = None
 
@@ -346,6 +349,58 @@ def getStyleChangedImage(inputFile, preferenceImages, tempdata="temp"):
 	returnImageList.append(MAX_OUT_IMAGE)
 	return returnImageList
 
+def get_color_system(directory):
+	'''
+	directory 내부에 있는 모든 Color system의 목록을 조사한다. Remarkable Color로 조사한다.
+	조사한 결과는 pickle을 통해 directory에 저장해둔다.
+	'''
+	fileNames = utility.get_filenames(directory)
+	colors = []
+	baseName = []
+
+	for f in fileNames:
+		print(f, " now doing .. " , str(fileNames.index(f)))
+		baseName.append(utility.get_base_name(f))
+		colors.append(getDominantColor(f))
+	
+	utility.save_result([baseName, colors], RESEARCH_BASE_DIR + "/" + COLOR_SYSTEM_FILE)
+
+def color_match(inputColor, colors, fileNames, admitable=30):
+	result_list = []
+	file_result = []
+	index = 0
+	for color in colors:
+		for c in color:
+			if utility.get_cielab_distance(inputColor, c) < admitable:
+				file_result.append(fileNames[index])
+				result_list.append(color)
+				break
+		index += 1
+	return result_list, file_result
+
+def image_color_match(inputImage):
+	# 이미지와 어울리는 컬러 List의 List를 return.
+	[fileNames, colors] = utility.load_result(RESEARCH_BASE_DIR + "/" + COLOR_SYSTEM_FILE)
+	input_colors = getDominantColor(inputImage)
+	admitableColors = []
+	admitableFiles = []
+	while len(admitableColors) == 0:
+		admitable = 10
+		for input_color in input_colors:
+			res_color, files = color_match(input_color, colors, fileNames, admitable)
+			index = 0
+			for r in res_color:
+				if r not in admitableColors:
+					admitableColors.append(r)
+					admitableFiles.append(files[index])
+				index += 1
+		admitable += 10
+	print(len(colors))
+	print(len(admitableColors))
+	utility.print_image(utility.color_to_image(input_colors))
+	
+	return admitableColors, admitableFiles
+
 def checkInput():
 	with open(FILE_INQUEUE, 'r') as f:
 		lines = f.readline()
@@ -436,6 +491,29 @@ def doJob(argv):
 		return getStyleChangedImage(options[0], utility.get_filenames("C:/workspace/IOU-Backend/util/IOU-ML/Image/InteriorImage/test/" + label_file[max_index]))
 
 if __name__ == "__main__":
+	'''
+	test_image_directory = "C:/workspace/IOU-ML/Image/InteriorImage/test_only_image"
+	testFile = utility.get_filenames(test_image_directory)
+	# get_color_system(test_image_directory)
+	print(testFile[0])
+	admitableColor, admitableFiles = image_color_match(testFile[0])
+	for ad in admitableColor:
+		print(admitableFiles[admitableColor.index(ad)])
+		utility.print_image(utility.color_to_image(ad))
+	'''
+	
+	# fileName = "Image/Interior/interior7/interior7_0.jpg"
+	files = utility.get_filenames("C:/workspace/IOU-ML/Image/InteriorImage/test_furniture/total")
+	index = 0
+	for fileName in files:
+		print("Now Process ", index, " / " , len(files))
+		outputFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "_divided")
+		outputDataFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "", extension="bin")
+		segment(fileName, outputFile, outputDataFile)
+		index += 1
+	
+
+	'''
 	# Load ML Module and Read - Do ML Job
 	# Model name 1 mean dataset`s folder 1.
 	model_name = '1'
@@ -450,3 +528,4 @@ if __name__ == "__main__":
 			checkInput()
 		else:
 			time.sleep(1)	# 1초간 휴식
+	'''

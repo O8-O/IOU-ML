@@ -290,6 +290,16 @@ def get_class_crop_image(image, coord, width, height):
 				crop_image[h - y_min][w - x_min] = [0, 0, 0]
 	return crop_image
 
+def color_to_image(colors, color_width=100, height=600):
+	# Make colors into image which width is color_width
+	color_image = np.zeros([height, color_width * len(colors), 3], dtype=np.uint8)
+	for i in range(len(colors)):
+		for h in range(height):
+			for w in range(i * color_width, (i + 1) * color_width):
+				color_image[h][w] = colors[i]
+	return color_image
+
+
 # Object Detector
 def tag_classifier(input_class):
 	# Get only our interested feature.
@@ -449,6 +459,17 @@ def get_segment_data(image):
 		return load_result(sg_file)
 	else:
 		return None
+
+def get_base_name(fileName):
+	'''
+	get file base name did not contain day or etc.
+	ex ) /~/~/2020-10-27T15-21-32.684Zinterior7.jpg -> interior7
+	ex ) /~/~/interior (73).jpg -> interior (73)
+	'''
+	if "-" in fileName.split("/")[-1]:
+		return fileName.spilt("Z")[-1].split(".")[0]
+	else:
+		return fileName.split("/")[-1].split(".")[0]
 
 def get_label_files(label_loc="C:/workspace/IOU-Backend/util/IOU-ML/Image/InteriorImage/test/"):
 	label_data = []

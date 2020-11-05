@@ -202,7 +202,7 @@ def get_segmented_image(inputFile):
 
 	return get_mask(args_list[1], cfg)
 
-def get_divided_class(inputFile, clipLimit=16.0, tileGridSize=(16, 16), start=60, diff=150, delete_line_n=20, border_n=6, border_k=2, merge_min_value=180, sim_score=30, merge_mode_color=False):
+def get_divided_class(inputFile, clipLimit=16.0, tileGridSize=(16, 16), start=60, diff=150, delete_line_n=20, border_n=6, border_k=2, merge_min_value=180, sim_score=30, out_bound_check=False, merge_mode_color=False):
 	'''
 	predict masking image and get divided_class.
 	'''
@@ -252,10 +252,11 @@ def get_divided_class(inputFile, clipLimit=16.0, tileGridSize=(16, 16), start=60
 		class_number, class_total, class_border, class_count, class_length = \
 		merge_small_size(divided_class, class_number, class_total, class_border, class_count, width, height, min_value=min_value)
 
-	# 원래 Segmentation 돤것에서 나가는 것은 삭제한다.
-	class_number, class_total, class_border, class_count, class_length = \
-	out_mask_delete(mask_map, class_number, class_total, class_border, class_count, class_length, out_pixel_threshold=0)
-
+	if out_bound_check:
+		# 원래 Segmentation 돤것에서 나가는 것은 삭제한다.
+		class_number, class_total, class_border, class_count, class_length = \
+		out_mask_delete(mask_map, class_number, class_total, class_border, class_count, class_length, out_pixel_threshold=0)
+	
 	class_color = image_processing.get_class_color(largest_mask, class_total, class_count)
 	if merge_mode_color:
 		# 비슷한 색끼리도 모아준다.

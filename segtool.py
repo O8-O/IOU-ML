@@ -6,15 +6,17 @@ import image_processing
 
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
+from PyQt5.QtCore import Qt
+import config
 
-from utility import divided_class_into_image
-
-# Change file name.
-FILE_NAME = "Image/example/chair1-divided.jpg"
+# File Name global variale
+RESEARCH_BASE_DIR = config.RESEARCH_BASE_DIR
+IMAGE_NAME = "Image/Interior/interior7/interior7_0.jpg"
+OUTPUT_FILE = RESEARCH_BASE_DIR + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "_divided")
+SEG_FILE_NAME = RESEARCH_BASE_DIR + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "", extension="bin")
+SEG_SAVE_NAME = RESEARCH_BASE_DIR + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "_userInput", extension="bin")
+# Constant
 CHANGE_DIVIED = "Image/example/temp.jpg"
-IMAGE_NAME = "Image/example/chair1.jpg"
-SEG_FILE_NAME = "Image/example/chair1.bin"
-SEG_SAVE_NAME = "Image/example/chair1_userInput.bin"
 
 # Init Global Data for classify segmentation.
 totalClass = [[]]
@@ -33,7 +35,7 @@ class MyApp(QWidget):
         grid = QGridLayout()
         
         # Add Image ( Segmentation )
-        self.imageLabel = ImageLabel(clickHandler, FILE_NAME)
+        self.imageLabel = ImageLabel(self.clickHandler, OUTPUT_FILE)
 
         grid.addWidget(self.imageLabel, 0, 0)
         
@@ -77,19 +79,26 @@ class MyApp(QWidget):
 
         buttonBox.setLayout(gridBox)
         return buttonBox
+
+    def clickHandler(self, event):
+        now = (event.pos().x(), event.pos().y())
+        if eraseMode:
+            eraseList.append(now)
+        else:
+            totalClass[nowIndex].append(now)
+        self.update()
     
     def saveData(self):
         global nowIndex     # 현재 추가하고 있는 index
-        global totalClass   # 전체 group 을 나눈 coord list
         global divided_class    # Class Number map
         global class_number     # Class Number 의 종류
         global class_total      # 각 Class들의 total Coords
         global class_border     # Class border.
         
-        img = cv2.imread(FILE_NAME)
+        img = cv2.imread(IMAGE_NAME)
         (height, width, _) = img.shape
 
-        class_total, class_number, divided_class = mergeGroup(class_total, class_number, divided_class, totalClass, nowIndex)
+        class_total, class_number, divided_class = mergeGroup(class_total, class_number, divided_class, nowIndex)
         utility.save_result([divided_class, class_number, class_total, class_border], SEG_SAVE_NAME)
         class_count = [len(class_total[i]) for i in range(len(class_total))]
         class_color = image_processing.get_class_color(utility.read_image(IMAGE_NAME), class_total, class_count)
@@ -106,6 +115,16 @@ class ImageLabel(QLabel):
         self.setPixmap(self.pixmap)
         self._whenClicked = clickHandler
     
+    def paintEvent(self, event):
+        qp = QPainter(self)
+        qp.drawPixmap(self.rect(), self.pixmap)
+
+        # Drawing Painter.
+        for now in eraseList:
+            drawErasePoint(qp, now)
+        for now in totalClass[nowIndex]:
+            drawAddPoint(qp, now)
+    
     def mouseReleaseEvent(self, event):
         self._whenClicked(event)
     
@@ -113,17 +132,21 @@ class ImageLabel(QLabel):
         self.pixmap = QPixmap(fileName)
         self.setPixmap(self.pixmap)
 
-def clickHandler(event):
-    global nowIndex
-    global totalClass
-    global eraseMode
-    global eraseList
-    now = (event.pos().x(), event.pos().y())
-    if eraseMode:
-        eraseList.append(now)
-        print(eraseList)
-    else:
-        totalClass[nowIndex].append(now)
+def drawErasePoint(qPaint, point):
+    pen = QPen(Qt.red, 1)
+    qPaint.setPen(pen)
+    for ct in class_total:
+        if point in ct:
+            for coord in ct:
+                qPaint.drawPoint(coord[0], coord[1])
+
+def drawAddPoint(qPaint, point):
+    pen = QPen(Qt.blue, 1)
+    qPaint.setPen(pen)
+    for ct in class_total:
+        if point in ct:
+            for coord in ct:
+                qPaint.drawPoint(coord[0], coord[1])
 
 def beforeClass():
     global nowIndex
@@ -142,10 +165,11 @@ def eraseToggle():
     global eraseMode
     eraseMode = not eraseMode
 
-def mergeGroup(classTotal, classNumber, dividedClass, totalClass, nowIndex):
+def mergeGroup(classTotal, classNumber, dividedClass, nowIndex):
     # totalClass[nowIndex] 의 좌표들이 있는 모든 classTotal을 합쳐서 return.
     # 해당 영역이 써있는 dividedClass와 classNumber는 자동으로 제일 첫 Area로 바꿔서 저장한다.
     mergeIndex = []
+    global totalClass
     for nowCoord in totalClass[nowIndex]:
         indx = findIndex(classTotal, nowCoord)
         if indx not in mergeIndex:
@@ -168,6 +192,7 @@ def mergeGroup(classTotal, classNumber, dividedClass, totalClass, nowIndex):
     else:
         retClassTotal = [classTotal[i] for i in range(len(classTotal))]
         retClassNumber = [classNumber[i] for i in range(len(classNumber))]
+    totalClass = [[]]
     
     global eraseList
     if len(eraseList) != 0:
