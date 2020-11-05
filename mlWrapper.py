@@ -8,6 +8,7 @@ import random
 import cv2
 import time
 import numpy as np
+import config
 
 from utility import coord_to_image, get_color_distance_map
 
@@ -16,7 +17,7 @@ MAX_CHANGE_COLOR = 3
 FILE_INQUEUE = "fileQueue.txt"
 FILE_OUTQUEUE = "fileOutQueue.txt"
 COLOR_SYSTEM_FILE = "colorSystem.bin"
-RESEARCH_BASE_DIR = "C:/MLDATA"
+RESEARCH_BASE_DIR = config.RESEARCH_BASE_DIR
 functionList = ["getStyleChangedImage"]
 detection_model = None
 
@@ -494,17 +495,24 @@ if __name__ == "__main__":
 	test_image_directory = "C:/workspace/IOU-ML/Image/InteriorImage/test_only_image"
 	testFile = utility.get_filenames(test_image_directory)
 	# get_color_system(test_image_directory)
+	print(testFile[0])
 	admitableColor, admitableFiles = image_color_match(testFile[0])
-	
 	for ad in admitableColor:
 		print(admitableFiles[admitableColor.index(ad)])
 		utility.print_image(utility.color_to_image(ad))
 	'''
-	fileName = "Image/Interior/interior7/interior7_0.jpg"
-	outputFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "_divided")
-	outputDataFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "", extension="bin")
-	segment(fileName, outputFile, outputDataFile)
 	
+	# fileName = "Image/Interior/interior7/interior7_0.jpg"
+	files = utility.get_filenames("C:/workspace/IOU-ML/Image/InteriorImage/test_furniture/total")
+	index = 0
+	for fileName in files:
+		print("Now Process ", index, " / " , len(files))
+		outputFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "_divided")
+		outputDataFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "", extension="bin")
+		segment(fileName, outputFile, outputDataFile)
+		index += 1
+	
+
 	'''
 	# Load ML Module and Read - Do ML Job
 	# Model name 1 mean dataset`s folder 1.

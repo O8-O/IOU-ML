@@ -7,17 +7,15 @@ import image_processing
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import Qt
+import config
 
-from utility import divided_class_into_image
-
-# Change file name.
-RESEARCH_BASE_DIR = "C:/MLDATA"
-FILE_NAME = "Image/Interior/interior7/interior7_0.jpg"
+# File Name global variale
+RESEARCH_BASE_DIR = config.RESEARCH_BASE_DIR
 IMAGE_NAME = "Image/Interior/interior7/interior7_0.jpg"
-OUTPUT_FILE = RESEARCH_BASE_DIR + '/' + utility.add_name(FILE_NAME.split("/")[-1], "_divided")
-# SEG_FILE_NAME = RESEARCH_BASE_DIR + '/' + utility.add_name(FILE_NAME.split("/")[-1], "", extension="bin")
-SEG_FILE_NAME = RESEARCH_BASE_DIR + '/' + utility.add_name(FILE_NAME.split("/")[-1], "_userInput", extension="bin")
-SEG_SAVE_NAME = RESEARCH_BASE_DIR + '/' + utility.add_name(FILE_NAME.split("/")[-1], "_userInput", extension="bin")
+OUTPUT_FILE = RESEARCH_BASE_DIR + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "_divided")
+SEG_FILE_NAME = RESEARCH_BASE_DIR + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "", extension="bin")
+SEG_SAVE_NAME = RESEARCH_BASE_DIR + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "_userInput", extension="bin")
+# Constant
 CHANGE_DIVIED = "Image/example/temp.jpg"
 
 # Init Global Data for classify segmentation.
@@ -97,7 +95,7 @@ class MyApp(QWidget):
         global class_total      # 각 Class들의 total Coords
         global class_border     # Class border.
         
-        img = cv2.imread(FILE_NAME)
+        img = cv2.imread(IMAGE_NAME)
         (height, width, _) = img.shape
 
         class_total, class_number, divided_class = mergeGroup(class_total, class_number, divided_class, nowIndex)
