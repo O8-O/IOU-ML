@@ -202,16 +202,21 @@ def get_segmented_image(inputFile):
 
 	return get_mask(args_list[1], cfg)
 
-def get_divided_class(inputFile, clipLimit=16.0, tileGridSize=(16, 16), start=60, diff=150, delete_line_n=20, border_n=6, border_k=2, merge_min_value=180, sim_score=30, out_bound_check=False, merge_mode_color=False):
+def get_divided_class(inputFile, total=False, clipLimit=16.0, tileGridSize=(16, 16), start=60, diff=150, delete_line_n=20, border_n=6, border_k=2, merge_min_value=180, sim_score=30, out_bound_check=False, merge_mode_color=False):
 	'''
 	predict masking image and get divided_class.
 	'''
-	try:
-		largest_mask, largest_index, mask_map, (width, height) = get_segmented_image(inputFile)
-	except RuntimeError:
-		largest_index = -1
-	# 만약 Detectron이 감지하지 못한경우
-	if largest_index == -1:
+	if not total:
+		try:
+			largest_mask, largest_index, mask_map, (width, height) = get_segmented_image(inputFile)
+		except RuntimeError:
+			largest_index = -1
+		# 만약 Detectron이 감지하지 못한경우
+		if largest_index == -1:
+			largest_mask = utility.read_image(inputFile)
+			(height, width, _) = largest_mask.shape
+			mask_map = [[True for _ in range(width)] for _ in range(height)]
+	else:
 		largest_mask = utility.read_image(inputFile)
 		(height, width, _) = largest_mask.shape
 		mask_map = [[True for _ in range(width)] for _ in range(height)]
@@ -235,6 +240,7 @@ def get_divided_class(inputFile, clipLimit=16.0, tileGridSize=(16, 16), start=60
 	# 잘린 외곽선들을 True-False List로 바꿔서 각각 가장 가까운 곳에 연결.
 	tf_map = utility.make_tf_map(noncycle_list, width, height)
 	for nc in noncycle_list:
+		print("Now proceed ", noncycle_list.index(nc), " Total ", len(noncycle_list))
 		# 가장자리가 될 포인트를 잡는다.
 		border_point = matrix_processing.find_border_k_tf_map(tf_map, nc, width, height, n=border_n, k=border_k, hard_check=False)
 		for b in border_point:

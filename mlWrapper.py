@@ -21,13 +21,13 @@ RESEARCH_BASE_DIR = config.RESEARCH_BASE_DIR
 functionList = ["getStyleChangedImage"]
 detection_model = None
 
-def segment(inputFile, outputFile, outputDataFile) :
+def segment(inputFile, outputFile, outputDataFile, total=False) :
 	'''
 	입력받은 파일을 Segmentation 해서 output한다.
 	Output 한 결과는 조각난 사진 모음.
 	'''
 	divided_class, class_number, class_total, class_border, _, _, class_color, _, width, height = \
-	segmentation.get_divided_class(inputFile)
+	segmentation.get_divided_class(inputFile, total=total)
 	utility.save_result([divided_class, class_number, class_total, class_border], outputDataFile)
 	
 	dc_image = utility.divided_class_into_image(divided_class, class_number, class_color, width, height, class_number)
@@ -502,7 +502,7 @@ if __name__ == "__main__":
 		utility.print_image(utility.color_to_image(ad))
 	'''
 	
-	# fileName = "Image/Interior/interior7/interior7_0.jpg"
+	'''
 	files = utility.get_filenames("C:/workspace/IOU-ML/Image/InteriorImage/test_furniture/total")
 	index = 0
 	for fileName in files:
@@ -511,8 +511,12 @@ if __name__ == "__main__":
 		outputDataFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "", extension="bin")
 		segment(fileName, outputFile, outputDataFile)
 		index += 1
-	
+	'''
 
+	fileName = "Image/example/interior1.jpg"
+	outputFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "_divided")
+	outputDataFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "", extension="bin")
+	segment(fileName, outputFile, outputDataFile, total=True)
 	'''
 	# Load ML Module and Read - Do ML Job
 	# Model name 1 mean dataset`s folder 1.

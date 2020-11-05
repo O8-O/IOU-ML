@@ -8,6 +8,7 @@ import cv2
 import utility
 import image_processing
 import matrix_processing
+from utility import print_image
 
 def set_style(content_image_name, style_image_name):
 	content_image = utility.load_image(content_image_name)
@@ -196,3 +197,64 @@ def get_similar_color_area_adjac(divided_class, class_number, class_total, class
 			return_class_total += class_total[i]
 	
 	return return_class_total
+
+def turn_off_light(input_file, light_color):
+	original_input = cv2.imread(input_file)
+	grayscale_input = cv2.imread(input_file, cv2.IMREAD_GRAYSCALE)
+	(height, width, _) = original_input.shape
+	output_image = np.zeros((height, width, 3), dtype=np.uint8)
+
+	for h in range(height):
+		for  w in range(width):
+			light_power = (grayscale_input[h][w] / 255) ** 3
+			for i in range(3):
+				if original_input[h][w][i] < int(light_color[i] * light_power):
+					color_value = original_input[h][w][i] - int(light_color[i] * light_power / 2)
+				else:
+					color_value = original_input[h][w][i] - int(light_color[i] * light_power)
+				output_image[h][w][i] = color_value if color_value > 0 else 0
+	
+	return output_image
+
+def turn_on_light(input_file, turn_off_picture, light_color):
+	grayscale_input = cv2.imread(input_file, cv2.IMREAD_GRAYSCALE)
+	(height, width) = grayscale_input.shape
+	output_image = np.zeros((height, width, 3), dtype=np.uint8)
+	lighter_color = lighter(light_color)
+
+	for h in range(height):
+		for  w in range(width):
+			light_power = (grayscale_input[h][w] / 255) ** 3
+			for i in range(3):
+				color_value = turn_off_picture[h][w][i] + int(lighter_color[i] * light_power)
+				output_image[h][w][i] = color_value if color_value < 255 else 255
+	
+	return output_image
+
+def lighter(color, limit=680):
+	add_all = 0
+	ret_color = [0, 0, 0]
+	for i in range(3):
+		ret_color[i] = color[i]
+		add_all += ret_color[i]
+	
+	r_ratio = (255 - color[0]) / 100
+	g_ratio = (255 - color[1]) / 100
+	b_ratio = (255 - color[2]) / 100
+
+	while add_all < limit:
+		ret_color[0] += r_ratio
+		ret_color[1] += g_ratio
+		ret_color[2] += b_ratio
+		add_all = 0
+		for i in range(3):
+			add_all += ret_color[i]
+
+	return ret_color
+
+if __name__ == "__main__":
+	file_name = "Image/example/interior1.jpg"
+	turn_off_picture = turn_off_light(file_name, [255, 255, 255])
+	# turn_on_picture = turn_on_light(file_name, turn_off_picture, [255, 157, 65])
+	turn_on_picture = turn_on_light(file_name, turn_off_picture, [178, 220, 240])
+	print_image(turn_on_picture)
