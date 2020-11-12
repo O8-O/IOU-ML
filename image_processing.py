@@ -29,6 +29,48 @@ def get_only_instance_image(input_file, mask, width, height, show=False):
 
 	return masked_image, mask_num
 
+def get_total_instance_image(masks, width, height, base=True):
+	# Set masks total part base.
+	mask = np.zeros((height, width))
+	for h in range(height):
+		for w in range(width):
+			mask[h][w] = not base
+			for m in masks:
+				if m[h][w]:
+					mask[h][w] = base
+					break
+	return mask
+
+def divied_three_part(mask, width, height):
+	part_coord = [[], [], [], []]
+	divided_class = np.zeros((height, width), dtype=np.uint8)
+	for h in range(0, int(height/3)):
+		for w in range(width):
+			if mask[h][w]:
+				divided_class[h][w] = 1
+				part_coord[1].append((w, h))
+			else:
+				part_coord[0].append((w, h))
+				
+		
+	for h in range(int(height/3), int(height/3)*2):
+		for w in range(width):
+			if mask[h][w]:
+				divided_class[h][w] = 2
+				part_coord[2].append((w, h))
+			else:
+				part_coord[0].append((w, h))
+
+	for h in range(int(height/3)*2, int(height/3)*3):
+		for w in range(width):
+			if mask[h][w]:
+				divided_class[h][w] = 3
+				part_coord[3].append((w, h))
+			else:
+				part_coord[0].append((w, h))
+	
+	return divided_class, part_coord
+
 def get_contours(frame, clipLimit=16.0, tileGridSize=(16, 16), start=190, diff=30):
 	'''
 	외곽선과 그 외곽선의 그 계층관계를 Return ( contours, heirachy )
