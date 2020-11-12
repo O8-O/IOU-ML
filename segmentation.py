@@ -1,12 +1,15 @@
 import multiprocessing as mp
+
+from tensorflow.python import util
 import matrix_processing
 import image_processing
 import utility
 
 from detectron2.config import get_cfg
 from detectron2.data.detection_utils import read_image
-
+from keras_segmentation.pretrained import pspnet_50_ADE_20K 
 from modules.predictor import VisualizationDemo
+from utility import divided_class_into_color_map
 
 def setup_cfg(args):
 	# load config from file and command-line arguments
@@ -163,16 +166,7 @@ def get_mask(fileName, cfg):
 	'''
 	fileName 내의 가장 큰 sgemenation 된 부분의 image 를 return.
 	'''
-	demo = VisualizationDemo(cfg)
-	# use PIL, to be consistent with evaluation
-	img = read_image(fileName, format="BGR")
-	predictions, visualized_output = demo.run_on_image(img)
-
-	# 계산한 prediction에서 mask를 가져옴.
-	masks = predictions['instances'].get_fields()["pred_masks"]
-	masks = masks.tolist()  # masks 는 TF value의 tensor 값들
-	(height, width) = predictions['instances'].image_size
-	instance_number = len(predictions['instances'])
+	masks, instance_number, width, height = get_segment_mask(fileName, cfg)
 	# Mask 칠한 이미지 중에서 가장 큰것만 가지고 진행함.
 	largest_mask = []
 	largest_mask_coord = []
@@ -188,6 +182,22 @@ def get_mask(fileName, cfg):
 			largest_mask_map = mask
 		
 	return largest_mask, largest_mask_number, largest_mask_map, (width, height) 
+
+def get_segment_mask(fileName, cfg):
+	'''
+	fileName 내의 가장 큰 sgemenation 된 부분의 image 를 return.
+	'''
+	demo = VisualizationDemo(cfg)
+	# use PIL, to be consistent with evaluation
+	img = read_image(fileName, format="BGR")
+	predictions, visualized_output = demo.run_on_image(img)
+
+	# 계산한 prediction에서 mask를 가져옴.
+	masks = predictions['instances'].get_fields()["pred_masks"]
+	masks = masks.tolist()  # masks 는 TF value의 tensor 값들
+	(height, width) = predictions['instances'].image_size
+	instance_number = len(predictions['instances'])
+	return masks, instance_number, width, height
 
 def get_segmented_image(inputFile):
 	mp.set_start_method("spawn", force=True)
@@ -345,8 +355,60 @@ def divided_into_classed_color_based(image, divided_class, class_total, class_nu
 	class_count = [len(class_total_divided[i]) for i in range(len(class_number))]
 	return class_number, class_total_divided, class_border, class_count
 
+def detect_wall_floor(file_name, model):
+	# 간단한 Segmentation for 지역 구분.
+	
+	out = model.predict_segmentation( inp=file_name )
+	(height, width, _) = utility.read_image(file_name).shape
+	resized_out = utility.resize_arr(out, width, height)
+	mp.set_start_method("spawn", force=True)
+	args_list = [
+		"modules/configs/COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml", 
+		file_name, 
+		0.3, 
+		["MODEL.WEIGHTS", "detectron2://COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x/137849600/model_final_f10217.pkl"],
+		"no_name"
+	]
+	cfg = setup_cfg(args_list)
+	masks, instance_number, width, height = get_segment_mask(file_name, cfg)
+	mask = image_processing.get_total_instance_image(masks, width, height, base=False)
+
+	floor_class = []
+	wall_class = []
+
+	for w in range(width):
+		if resized_out[0][w] not in wall_class:
+			wall_class.append(resized_out[0][w])
+		if resized_out[-1][w] not in floor_class:
+			floor_class.append(resized_out[-1][w])
+
+	print(floor_class)
+	print(wall_class)
+	masked_image = utility.divided_class_into_color_map(resized_out, width, height)
+	utility.print_image(masked_image)
+
+	import numpy as np
+	wall_divied = np.zeros((height, width), dtype=np.uint8)
+	for h in range(height):
+		for w in range(width):
+			if h < 2 / 3 * height and mask[h][w] and resized_out[h][w] in wall_class:
+				wall_divied[h][w] = 1
+			elif h > 2 / 3 * height and mask[h][w] and resized_out[h][w] in floor_class:
+				wall_divied[h][w] = 2
+			
+	masked_image = utility.divided_class_into_color_map(wall_divied, width, height)
+	utility.print_image(masked_image)
+	
+	return wall_divied
+
+
 if __name__ == "__main__":
+	'''
 	divided_class, class_number, class_total, class_border, class_count, class_length, class_color, largest_mask, width, height = \
 		get_divided_class("Image/chair1.jpg")
 	dc_image = utility.divided_class_into_image(divided_class, class_number, class_color, width, height, class_number)
 	utility.print_image(dc_image)
+	'''
+	model = pspnet_50_ADE_20K() # load the pretrained model trained on ADE20k dataset
+	detect_wall_floor("Image/example/interior7.jpg", model)
+

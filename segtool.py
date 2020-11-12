@@ -11,7 +11,7 @@ import config
 
 # File Name global variale
 RESEARCH_BASE_DIR = config.RESEARCH_BASE_DIR
-IMAGE_NAME = "Image/InteriorImage/test_furniture/total/53.jpg"
+IMAGE_NAME = "Image/example/interior1.jpg"
 OUTPUT_FILE = RESEARCH_BASE_DIR + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "_divided")
 SEG_FILE_NAME = RESEARCH_BASE_DIR + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "", extension="bin")
 SEG_SAVE_NAME = RESEARCH_BASE_DIR + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "_userInput", extension="bin")
