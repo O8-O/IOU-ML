@@ -299,6 +299,38 @@ def color_to_image(colors, color_width=100, height=600):
 				color_image[h][w] = colors[i]
 	return color_image
 
+def divided_class_into_color_map(divided_class, width, height):
+	import random
+	color_list = []
+	class_list = []
+	output_image = np.zeros((height, width, 3), dtype=np.uint8)
+
+	for h in range(height):
+		for w in range(width):
+			if divided_class[h][w] not in class_list:
+				color_list.append([random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)])
+				class_list.append(divided_class[h][w])
+			output_image[h][w] = color_list[class_list.index(divided_class[h][w])]
+	
+	return output_image
+
+def resize_arr(arr, width, height):
+	(origin_height, origin_width)= arr.shape
+	output_arr = np.zeros((height, width))
+	x_ratio = width / origin_width
+	y_ratio = height / origin_height
+	for h in range(height):
+		for w in range(width):
+			x = int(w / x_ratio)
+			x = 0 if x < 0 else x
+			x = origin_width - 1 if x == origin_width else x
+
+			y = int(h / y_ratio)
+			y = 0 if y < 0 else y
+			y = origin_height - 1 if y == origin_height else y
+
+			output_arr[h][w] = arr[y][x]
+	return output_arr
 
 # Object Detector
 def tag_classifier(input_class):
