@@ -401,7 +401,6 @@ def detect_wall_floor(file_name, model):
 	
 	return wall_divied
 
-
 if __name__ == "__main__":
 	'''
 	divided_class, class_number, class_total, class_border, class_count, class_length, class_color, largest_mask, width, height = \

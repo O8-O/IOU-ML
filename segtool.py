@@ -11,7 +11,7 @@ import config
 
 # File Name global variale
 RESEARCH_BASE_DIR = config.RESEARCH_BASE_DIR
-IMAGE_NAME = "Image/example/interior1.jpg"
+IMAGE_NAME = "Image/Interior/interior7/interior7_0.jpg"
 OUTPUT_FILE = RESEARCH_BASE_DIR + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "_divided")
 SEG_FILE_NAME = RESEARCH_BASE_DIR + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "", extension="bin")
 SEG_SAVE_NAME = RESEARCH_BASE_DIR + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "_userInput", extension="bin")
@@ -42,11 +42,18 @@ class MyApp(QWidget):
         # Add Button List ( 3개 버튼 - before / erase / next )
         grid.addWidget(self.buttonList(), 1, 0)
 
+        # Add Clear Button
+        clearBtn = QPushButton(self)
+        clearBtn.setText("Clear")
+        grid.addWidget(clearBtn, 2, 0)
+        clearBtn.clicked.connect(self.clearData)
+
         # Add Save Button
         saveButton = QPushButton(self)
         saveButton.setText("Save")
-        grid.addWidget(saveButton, 2, 0)
+        grid.addWidget(saveButton, 3, 0)
         saveButton.clicked.connect(self.saveData)
+        
         grid.setRowStretch(0, 20)
 
         self.setLayout(grid)
@@ -88,6 +95,12 @@ class MyApp(QWidget):
             totalClass[nowIndex].append(now)
         self.update()
     
+    def clearData(self):
+        global totalClass
+        global eraseList
+        totalClass = [[]]
+        eraseList = []
+
     def saveData(self):
         global nowIndex     # 현재 추가하고 있는 index
         global divided_class    # Class Number map

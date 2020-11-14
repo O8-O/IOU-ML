@@ -26,9 +26,9 @@ def segment(inputFile, outputFile, outputDataFile, total=False) :
 	입력받은 파일을 Segmentation 해서 output한다.
 	Output 한 결과는 조각난 사진 모음.
 	'''
-	divided_class, class_number, class_total, class_border, _, _, class_color, _, width, height = \
+	divided_class, class_number, class_total, class_border, _, _, class_color, largest_mask, width, height = \
 	segmentation.get_divided_class(inputFile, total=total)
-	utility.save_result([divided_class, class_number, class_total, class_border], outputDataFile)
+	utility.save_result([divided_class, class_number, class_total, class_border, largest_mask], outputDataFile)
 	
 	dc_image = utility.divided_class_into_image(divided_class, class_number, class_color, width, height, class_number)
 	if not outputFile == None:
@@ -120,16 +120,16 @@ def styleTransfer(inputFile, inputDataFile, destFile) :
 	입력받은 inputFile의 색과 질감을 destFile의 색과 질감으로 임의로 변형해준다. 
 	'''
 	if utility.is_exist(inputDataFile):
-		[divided_class, class_number, class_total, class_border] = \
+		[divided_class, class_number, class_total, _] = \
 		utility.load_result(inputDataFile)
 		class_count = []
 		for ct in class_total:
 			class_count.append(len(ct))
 	else:
-		divided_class, class_number, class_total, class_border, class_count, _, class_color, _, _, _ = \
+		divided_class, class_number, class_total, _, class_count, _, class_color, _, _, _ = \
 		segmentation.get_divided_class(inputFile)
 	
-	# Init Variables.
+	# Init Variables. - TODO : This need to be in segmentation data saving.
 	largest_mask, _, _, (width, height) = segmentation.get_segmented_image(inputFile)
 	class_color = image_processing.get_class_color(utility.read_image(inputFile), class_total, class_count)
 
@@ -138,28 +138,20 @@ def styleTransfer(inputFile, inputDataFile, destFile) :
 
 	segdata = utility.add_name(inputFile, "_segmented")
 	utility.save_image(largest_mask, segdata)
-
-	# Get Cutted File`s color.
-	input_color = getDominantColor(segdata)
-	if len(input_color) < MAX_CHANGE_COLOR:
-		input_color *= int(MAX_CHANGE_COLOR // len(input_color)) + 1 
-
-	dest_color = getDominantColor(destFile)
-	if len(dest_color) < MAX_CHANGE_COLOR:
-		dest_color *= int(MAX_CHANGE_COLOR // len(dest_color)) + 1 
-	temp = []
-	for i in range(len(dest_color)):
-		temp.append(utility.cut_saturation(dest_color[i]))
-	dest_color = temp
+	
+	input_sample = [class_total[i][0] for i in range(len(class_total))]
+	if len(input_sample) < MAX_CHANGE_COLOR:
+		input_sample *= int(MAX_CHANGE_COLOR // len(input_sample)) + 1 
+	dest_color = image_processing.get_dominant_color(destFile, clusters=8)
 
 	for i in range(MAX_OUT_IMAGE):
 		next_file_name = file_base_name + "_" + str(i) + file_extension
-		now_input_color = random.sample(input_color, MAX_CHANGE_COLOR)
+		now_input_sample = random.sample(input_sample, MAX_CHANGE_COLOR)
 		now_dest_color = random.sample(dest_color, MAX_CHANGE_COLOR)
-		destArea = []
+		part_change_image = utility.read_image(inputFile)
 		for j in range(MAX_CHANGE_COLOR):
-			destArea.append(styler.get_similar_color_area(divided_class, class_number, class_total, class_color, now_input_color[j], 200))
-		part_change_image = styler.change_area_color_multi(inputFile, next_file_name, now_dest_color, divided_class, destArea, change_style="grayscale")
+			change_image = styler.change_dest_color(inputFile, next_file_name, now_dest_color[j], divided_class, class_total, [now_input_sample[j]], save_flag=False)
+			part_change_image = image_processing.add_up_image(part_change_image, change_image, class_total[input_sample.index(now_input_sample[j])], width, height)
 		utility.print_image(part_change_image)
 
 def getFurnitureShape(inputFile, inputDataFile, outputFile):
@@ -501,7 +493,10 @@ if __name__ == "__main__":
 		print(admitableFiles[admitableColor.index(ad)])
 		utility.print_image(utility.color_to_image(ad))
 	'''
-	
+	inputFile = "Image/Interior/interior7/interior7_0.jpg"
+	inputDataFile = RESEARCH_BASE_DIR + '/' + utility.add_name(inputFile.split("/")[-1], "_userInput", extension="bin")
+	destFile = "Image/example/Sofa/s1.jpg"
+	styleTransfer(inputFile, inputDataFile, destFile)
 	'''
 	files = utility.get_filenames("C:/workspace/IOU-ML/Image/InteriorImage/test_furniture/total")
 	index = 0
@@ -512,11 +507,17 @@ if __name__ == "__main__":
 		segment(fileName, outputFile, outputDataFile)
 		index += 1
 	'''
-
+	'''
 	fileName = "Image/example/interior1.jpg"
 	outputFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "_divided")
 	outputDataFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "", extension="bin")
 	segment(fileName, outputFile, outputDataFile, total=True)
+	'''
+
+
+	'''
+
+	'''
 	'''
 	# Load ML Module and Read - Do ML Job
 	# Model name 1 mean dataset`s folder 1.
