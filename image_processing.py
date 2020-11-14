@@ -30,7 +30,7 @@ def get_only_instance_image(input_file, mask, width, height, show=False):
 	return masked_image, mask_num
 
 def get_total_instance_image(masks, width, height, base=True):
-	# Set masks total part base.
+    	# Set masks total part base.
 	mask = np.zeros((height, width))
 	for h in range(height):
 		for w in range(width):
@@ -205,6 +205,14 @@ def blend_color(color1, color2, change_style="median", a=1, b=1):
 def to_gray_scale(image):
 	image_arr = cv2.imread(image)
 	return cv2.cvtColor(image_arr, cv2.COLOR_BGR2GRAY)
+
+def inpainting(imgFile, maskFile):
+	# mask 파일은 지울 부분이 흰색으로 칠해진 원래 이미지와 비슷한 사진.
+	img = cv2.imread(imgFile)
+	mask = cv2.imread(maskFile, 0)	# cv2.IMREAD_GRAYSCALE
+
+	next_picture = cv2.inpaint(img, mask, 3, cv2.INPAINT_TELEA)
+	return next_picture
 
 # Object Detector
 def get_rect_image(f, x_min, x_max, y_min, y_max):
