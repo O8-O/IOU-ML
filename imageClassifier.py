@@ -1,5 +1,4 @@
 import objectDetector
-from objectDetector import classifier
 import utility
 import image_processing
 
@@ -70,6 +69,36 @@ def saveParameters(fileDir):
 		dom_color = image_processing.get_dominant_color(f)
 		n_color = utility.get_remarkable_color_n(dom_color, MAX_COLOR_LENGTH)
 		utility.save_result([coord, str_tag, number_tag, score, rect_files, additional_infor, n_color], save_file_name)
+
+def saveParameter(fileName, detection_model):
+	coord, str_tag, number_tag, score = objectDetector.inference(detection_model, fileName)
+
+	# Save file name make.
+	save_file_name = utility.get_od_bin(fileName)
+	dirs = save_file_name.split("/")
+
+	save_image_name = ""
+	for d in dirs[0:-1]:
+		save_image_name += d + "/"
+	save_image_name += fileName.split("/")[-1].split(".")[0] + "/"
+
+	utility.make_dir(save_image_name)
+
+	rect_files = []
+	additional_infor = []
+
+	for i in range(len(str_tag)):
+		additional_infor.append(-1)
+		rect_image = image_processing.get_rect_image(fileName, int(coord[i][0]), int(coord[i][1]), int(coord[i][2]), int(coord[i][3]))
+		rect_image_name = save_image_name + fileName.split("/")[-1]
+		rect_image_name = utility.add_name(rect_image_name, "_" + str(i))
+		rect_files.append(rect_image_name)
+		utility.save_image(rect_image, rect_image_name)
+
+	dom_color = image_processing.get_dominant_color(fileName)
+	n_color = utility.get_remarkable_color_n(dom_color, MAX_COLOR_LENGTH)
+	utility.save_result([coord, str_tag, number_tag, score, rect_files, additional_infor, n_color], save_file_name)
+	return save_file_name
 
 def readParameter(fileDir):
 	# File is directory

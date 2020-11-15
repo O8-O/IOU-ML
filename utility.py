@@ -6,6 +6,7 @@ import os
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import shutil
+import config
 
 from tensorflow.python.eager.context import internal_operation_seed
 
@@ -520,3 +521,12 @@ def get_only_jpg_files(get_dir):
 		if ".jpg" in f:
 			ret_dir.append(f)
 	return ret_dir
+
+def get_userinput_bin(inputFile):
+	return config.RESEARCH_BASE_DIR + '/' + add_name(inputFile.split("/")[-1], "_userInput", extension="bin")
+
+def get_bin(inputFile):
+	return config.RESEARCH_BASE_DIR + '/' + inputFile.split("/")[-1] + ".bin"
+
+def get_od_bin(inputFile):
+	return config.RESEARCH_BASE_DIR + '/' + inputFile.split("/")[-1] + "_od.bin"

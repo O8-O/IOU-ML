@@ -262,6 +262,11 @@ def lighter(color, limit=680):
 
 	return ret_color
 
+def get_light_change(inputFile, baseLight, changeLight):
+	turn_off_picture = turn_off_light(inputFile, baseLight)
+	turn_on_picture = turn_on_light(inputFile, turn_off_picture, changeLight)
+	return turn_on_picture
+
 if __name__ == "__main__":
 	file_name = "Image/example/interior1.jpg"
 	turn_off_picture = turn_off_light(file_name, [255, 255, 255])

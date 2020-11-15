@@ -124,6 +124,23 @@ def get_divided_class(mask, width, height):
 	
 	return divided_class, class_boundary, class_count, class_length
 
+def divided_class_into_class_total(divided_class):
+	height = len(divided_class)
+	width = len(divided_class[0])
+	visited = [[False for _ in range(width)] for _ in range(width)]
+	mask = [[True for _ in range(width)] for _ in range(width)]
+	class_total = []
+	class_number = []
+	
+	for h in range(height):
+		for w in range(width):
+			if not visited[h][w]:
+				total, _, _ = bfs(mask, visited, (w, h), (width, height))
+				class_total.append(total)
+				class_number.append(divided_class[h][w])
+
+	return class_total, class_number
+
 def get_largest_part(mask, width, height, attach_ratio=0.15):
 	'''
 		TODO	: attach_ration 이유 정하기

@@ -2,6 +2,7 @@ from tensorflow.python import util
 import styler
 import segmentation
 import image_processing
+import matrix_processing
 import utility
 import objectDetector
 import random
@@ -9,11 +10,14 @@ import cv2
 import time
 import numpy as np
 import config
+import imageClassifier
 
-from utility import coord_to_image, get_color_distance_map
+from keras_segmentation.pretrained import pspnet_50_ADE_20K 
 
 MAX_OUT_IMAGE = 8
 MAX_CHANGE_COLOR = 3
+MAX_WALL_IMAGE = 2
+MAX_PART_CHANGE_IMAGE = 4
 FILE_INQUEUE = "fileQueue.txt"
 FILE_OUTQUEUE = "fileOutQueue.txt"
 COLOR_SYSTEM_FILE = "colorSystem.bin"
@@ -267,7 +271,7 @@ def change_str_to_coord(coord_str):
 	[a, b] = coord_to_image[1:-1].split(",")
 	return (a, b)
 
-def getStyleChangedImage(inputFile, preferenceImages, tempdata="temp"):
+def getStyleChangedImage_past(inputFile, preferenceImages, tempdata="temp"):
 	'''
 	inputFile에 대한 preferenceImages 를 출력. 
 	print 함수로 각 변환한 사진의 이름을 출력하고, 마지막에 몇 장을 줄것인지 출력한다.
@@ -340,6 +344,84 @@ def getStyleChangedImage(inputFile, preferenceImages, tempdata="temp"):
 		returnImageList.append(saveOutputFile)
 	returnImageList.append(MAX_OUT_IMAGE)
 	return returnImageList
+
+def getODandSeg(inputFile, model):
+	'''
+	입력 파일의 Object Detection 과 Segmentation 된 결과를 return.
+	'''
+	imageClassifier.saveParameter(inputFile, model)
+
+def changeWallFloor(inputFile, outputFile, wall_divided, wall_total, wall_number, i, preferWallColor, preferFloorColor):
+	wfOutputFile = utility.add_name(outputFile, "_wfColor" + str(i))
+	styler.change_dest_color(inputFile, wfOutputFile, preferWallColor[i], \
+		wall_divided, wall_total, [wall_total[wall_number.index(segmentation.WALL_CLASS)][0]])
+	styler.change_dest_color(wfOutputFile, wfOutputFile, preferFloorColor[i], \
+		wall_divided, wall_total, [wall_total[wall_number.index(segmentation.FLOOR_CLASS)][0]])
+	return wfOutputFile
+
+def getPartChangedImage(inputFile, outputFile, str_tag, coord, rect_files, selectedPreferenceImage, i, j):
+	partChangedOutFile = utility.add_name(outputFile, "_changed_" + str(i) + str(j))
+	original_image = utility.read_image(inputFile)
+
+	for k in range(len(str_tag)):
+		if ( str_tag[k] == "sofa" or str_tag[k] == "chair" ):
+			furniture_file = RESEARCH_BASE_DIR + inputFile + rect_files[k]
+			# 만약 userinput 이 있다면, 그것을 대신 사용.
+			if utility.is_exist(utility.get_userinput_bin(furniture_file)):
+				furniture_file = utility.get_userinput_bin(furniture_file)
+			styled_furniture = styleTransfer(furniture_file, inputDataFile, selectedPreferenceImage)
+			original_image = image_processing.add_up_image_to(original_image, styled_furniture, \
+				int(coord[k][0]), int(coord[k][1]), int(coord[k][2]), int(coord[k][3]))
+
+	utility.save_image(original_image, partChangedOutFile)
+	return partChangedOutFile
+
+def getStyleChangedImage(inputFile, preferenceImages, model, baseLight=[255,255,255], changeLight=[178, 220, 240]):
+	'''
+	입력 Color는 BGR ( [178, 220, 240] 은 주황불빛 )
+	preferenceImages 가 4장만 되어도 충분함.
+	'''
+	outputFile = utility.get_add_dir(inputFile, "temp")
+
+	# Object Detect & Segmentation
+	checked_file = getODandSeg(inputFile, model) # Get OD Data
+	
+	# Wall Detection with input image.
+	model = pspnet_50_ADE_20K()
+	wall_divided = segmentation.detect_wall_floor(inputFile, model)
+	wall_total, wall_number = matrix_processing.divided_class_into_class_total(wall_divided)
+	preferWallColor = print("Pre calculated color files with ", preferenceImages)
+	preferFloorColor = print("Pre calculated color files with ", preferenceImages)
+	selectedPreferenceImage = print("위의 두 color를 가지는 selectedPreferenceImage 혹은 그냥 다른 이미지여도 좋음.")
+	# Select 2 color of above to preferWallColor and preferFloorColor
+
+	# Change wall & floor
+	wfColorChangeImage = []
+	for i in range(MAX_WALL_IMAGE):
+		wfOutputFile = changeWallFloor(inputFile, outputFile, wall_divided, wall_total, wall_number, i, preferWallColor, preferFloorColor)
+		wfColorChangeImage.append(wfOutputFile)
+
+	# Change Object ( Table and Chair )
+	partChangedFiles = []
+	[coord, str_tag, number_tag, score, rect_files, additional_infor, n_color] = utility.get_od_data(checked_file)
+
+	for i in range(MAX_WALL_IMAGE):
+		for j in range(MAX_PART_CHANGE_IMAGE):
+			partChangedOutFile = getPartChangedImage(wfColorChangeImage[i], outputFile, str_tag, coord, rect_files, selectedPreferenceImage, i, j)
+			partChangedFiles.append(partChangedOutFile)
+	
+
+	# Add some plant.
+	partChangedFiles = print() # Image number will not be changed.
+
+	# Change Light
+	for i in range(MAX_OUT_IMAGE):
+		if random.randint(1, MAX_OUT_IMAGE) > 4:
+			changed_file = styler.get_light_change(partChangedFiles[i], baseLight, changeLight)
+		else:
+			changed_file = styler.get_light_change(partChangedFiles[i], baseLight, baseLight)
+		utility.save_image(changed_file, partChangedFiles[i])
+	# partChangedFiles 가 결국 바뀐 파일들
 
 def get_color_system(directory):
 	'''
