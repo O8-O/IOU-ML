@@ -121,7 +121,8 @@ def add_up_image(original_image, add_image, add_coord, width, height):
 		for w in range(width):
 			output_image[h][w] = original_image[h][w]
 	for coord in add_coord:
-		output_image[coord[1]][coord[0]] = add_image[coord[1]][coord[0]]
+		if coord[0] < width and coord[1] < height and coord[0] >= 0 and coord[1] >= 0:
+			output_image[coord[1]][coord[0]] = add_image[coord[1]][coord[0]]
 	return output_image
 
 def get_dominant_color(image, clusters=20):

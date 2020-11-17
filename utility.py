@@ -523,10 +523,11 @@ def get_only_jpg_files(get_dir):
 	return ret_dir
 
 def get_userinput_bin(inputFile):
-	return config.RESEARCH_BASE_DIR + '/' + add_name(inputFile.split("/")[-1], "_userInput", extension="bin")
+	return config.RESEARCH_BASE_DIR + '/' + add_name(os.path.basename(inputFile), "_userInput", extension="bin")
 
 def get_bin(inputFile):
-	return config.RESEARCH_BASE_DIR + '/' + inputFile.split("/")[-1] + ".bin"
+	return config.RESEARCH_BASE_DIR + '/' + inputFile.split("/")[-1].split(".")[0] + ".bin"
 
 def get_od_bin(inputFile):
-	return config.RESEARCH_BASE_DIR + '/' + inputFile.split("/")[-1] + "_od.bin"
+	return config.RESEARCH_BASE_DIR + '/' + inputFile.split("/")[-1].split(".")[0] + "_od.bin"
+	

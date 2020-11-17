@@ -28,7 +28,7 @@ def setup_cfg(args):
 
 def merge_around(divided_class, class_number, class_total, class_border, class_count, merge_indx, width, height):
 	large_class_number = matrix_processing.get_around_largest_area(divided_class, width, height, class_border[merge_indx], class_number[merge_indx])
-	if large_class_number == 0:
+	if large_class_number == 0 or large_class_number == -1:
 		# Set into 0 Class
 		matrix_processing.set_area(divided_class, class_total[merge_indx], 0)
 		del class_number[merge_indx]

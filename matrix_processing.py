@@ -127,17 +127,20 @@ def get_divided_class(mask, width, height):
 def divided_class_into_class_total(divided_class):
 	height = len(divided_class)
 	width = len(divided_class[0])
-	visited = [[False for _ in range(width)] for _ in range(width)]
-	mask = [[True for _ in range(width)] for _ in range(width)]
-	class_total = []
-	class_number = []
+	class_total = [[], [], []]
+	class_number = [0, 1, 2]
 	
 	for h in range(height):
 		for w in range(width):
-			if not visited[h][w]:
-				total, _, _ = bfs(mask, visited, (w, h), (width, height))
-				class_total.append(total)
-				class_number.append(divided_class[h][w])
+			if divided_class[h][w] == 0:
+				# Nothing class
+				class_total[0].append((w,h))
+			elif divided_class[h][w] == 1:
+				# Wall class
+				class_total[1].append((w,h))
+			elif divided_class[h][w] == 2:
+				# Floor class
+				class_total[2].append((w,h))
 
 	return class_total, class_number
 

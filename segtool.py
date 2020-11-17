@@ -11,7 +11,7 @@ import config
 
 # File Name global variale
 RESEARCH_BASE_DIR = config.RESEARCH_BASE_DIR
-IMAGE_NAME = "Image/Interior/interior7/interior7_0.jpg"
+IMAGE_NAME = "C:/MLDATA/interior7/interior7_2.jpg" 
 OUTPUT_FILE = RESEARCH_BASE_DIR + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "_divided")
 SEG_FILE_NAME = RESEARCH_BASE_DIR + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "", extension="bin")
 SEG_SAVE_NAME = RESEARCH_BASE_DIR + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "_userInput", extension="bin")
@@ -23,7 +23,11 @@ totalClass = [[]]
 nowIndex = 0
 eraseMode = False
 eraseList = []
-[divided_class, class_number, class_total, class_border] = utility.load_result(SEG_FILE_NAME)
+load_value = utility.load_result(SEG_FILE_NAME)
+if len(load_value) == 5:
+    [divided_class, class_number, class_total, class_border, _] = load_value
+else:
+    [divided_class, class_number, class_total, class_border] = load_value
 
 class MyApp(QWidget):
     def __init__(self):

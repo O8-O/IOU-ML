@@ -11,6 +11,7 @@ import time
 import numpy as np
 import config
 import imageClassifier
+import os
 
 from keras_segmentation.pretrained import pspnet_50_ADE_20K 
 
@@ -124,24 +125,28 @@ def styleTransfer(inputFile, inputDataFile, destFile) :
 	입력받은 inputFile의 색과 질감을 destFile의 색과 질감으로 임의로 변형해준다. 
 	'''
 	if utility.is_exist(inputDataFile):
-		[divided_class, class_number, class_total, _] = \
-		utility.load_result(inputDataFile)
+		loadData = utility.load_result(inputDataFile)
+		if len(loadData) == 5:
+			# Newer Version of segmentation.
+			[divided_class, class_number, class_total, _, largest_mask] = loadData
+		else:
+			[divided_class, class_number, class_total, _] = loadData
+			largest_mask = None
 		class_count = []
 		for ct in class_total:
 			class_count.append(len(ct))
 	else:
 		divided_class, class_number, class_total, _, class_count, _, class_color, _, _, _ = \
 		segmentation.get_divided_class(inputFile)
-	
-	# Init Variables. - TODO : This need to be in segmentation data saving.
-	largest_mask, _, _, (width, height) = segmentation.get_segmented_image(inputFile)
-	class_color = image_processing.get_class_color(utility.read_image(inputFile), class_total, class_count)
+		
+	# Init Variables. - TODO : Change this part with largest mask.
+	# largest_mask, _, _, (width, height) = segmentation.get_segmented_image(inputFile)
+	# class_color = image_processing.get_class_color(utility.read_image(inputFile), class_total, class_count)
+	img = utility.read_image(inputFile)
+	(height, width, _) = img.shape
 
 	file_extension = "." + inputFile.split(".")[1]
 	file_base_name = inputFile.split(".")[0]
-
-	segdata = utility.add_name(inputFile, "_segmented")
-	utility.save_image(largest_mask, segdata)
 	
 	input_sample = [class_total[i][0] for i in range(len(class_total))]
 	if len(input_sample) < MAX_CHANGE_COLOR:
@@ -156,7 +161,7 @@ def styleTransfer(inputFile, inputDataFile, destFile) :
 		for j in range(MAX_CHANGE_COLOR):
 			change_image = styler.change_dest_color(inputFile, next_file_name, now_dest_color[j], divided_class, class_total, [now_input_sample[j]], save_flag=False)
 			part_change_image = image_processing.add_up_image(part_change_image, change_image, class_total[input_sample.index(now_input_sample[j])], width, height)
-		utility.print_image(part_change_image)
+	return part_change_image
 
 def getFurnitureShape(inputFile, inputDataFile, outputFile):
 	'''
@@ -345,14 +350,25 @@ def getStyleChangedImage_past(inputFile, preferenceImages, tempdata="temp"):
 	returnImageList.append(MAX_OUT_IMAGE)
 	return returnImageList
 
-def getODandSeg(inputFile, model):
-	'''
-	입력 파일의 Object Detection 과 Segmentation 된 결과를 return.
-	'''
-	imageClassifier.saveParameter(inputFile, model)
+def getODandSegment(inputFile, od_model):
+	# [coord, str_tag, number_tag, score, rect_files, additional_infor, n_color] = imageClassifier.saveParameter(inputFile, od_model) # Get OD Data
+	[coord, str_tag, number_tag, score, rect_files, additional_infor, n_color] = \
+	utility.load_result(config.RESEARCH_BASE_DIR + "/" + os.path.basename(utility.get_od_bin(inputFile)))
+	for i in range(len(str_tag)):
+		if str_tag[i] == "sofa" or str_tag[i] == "chair":
+			if utility.is_exist(utility.get_userinput_bin(rect_files[i])):
+				rect_data_file = utility.get_userinput_bin(rect_files[i])
+			elif utility.is_exist(utility.get_bin(rect_files[i])):
+				rect_data_file = utility.get_bin(rect_files[i])
+			else:
+				rect_data_file = utility.get_bin(rect_files[i])
+				segment(rect_files[i], utility.add_name(rect_files[i], "_divided"), rect_data_file)
+	return [coord, str_tag, number_tag, score, rect_files, additional_infor, n_color] 
 
 def changeWallFloor(inputFile, outputFile, wall_divided, wall_total, wall_number, i, preferWallColor, preferFloorColor):
 	wfOutputFile = utility.add_name(outputFile, "_wfColor" + str(i))
+	print(preferWallColor)
+	print(preferFloorColor)
 	styler.change_dest_color(inputFile, wfOutputFile, preferWallColor[i], \
 		wall_divided, wall_total, [wall_total[wall_number.index(segmentation.WALL_CLASS)][0]])
 	styler.change_dest_color(wfOutputFile, wfOutputFile, preferFloorColor[i], \
@@ -365,62 +381,86 @@ def getPartChangedImage(inputFile, outputFile, str_tag, coord, rect_files, selec
 
 	for k in range(len(str_tag)):
 		if ( str_tag[k] == "sofa" or str_tag[k] == "chair" ):
-			furniture_file = RESEARCH_BASE_DIR + inputFile + rect_files[k]
+			furniture_file = rect_files[k]
 			# 만약 userinput 이 있다면, 그것을 대신 사용.
 			if utility.is_exist(utility.get_userinput_bin(furniture_file)):
-				furniture_file = utility.get_userinput_bin(furniture_file)
-			styled_furniture = styleTransfer(furniture_file, inputDataFile, selectedPreferenceImage)
+				furniture_data_file = utility.get_userinput_bin(furniture_file)
+			else:
+				furniture_data_file = utility.get_bin(furniture_file)
+			styled_furniture = styleTransfer(furniture_file, furniture_data_file, selectedPreferenceImage)
 			original_image = image_processing.add_up_image_to(original_image, styled_furniture, \
 				int(coord[k][0]), int(coord[k][1]), int(coord[k][2]), int(coord[k][3]))
 
 	utility.save_image(original_image, partChangedOutFile)
 	return partChangedOutFile
 
-def getStyleChangedImage(inputFile, preferenceImages, model, baseLight=[255,255,255], changeLight=[178, 220, 240]):
+def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,255,255], changeLight=[178, 220, 240]):
 	'''
 	입력 Color는 BGR ( [178, 220, 240] 은 주황불빛 )
 	preferenceImages 가 4장만 되어도 충분함.
 	'''
+	detection_model = pspnet_50_ADE_20K()
 	outputFile = utility.get_add_dir(inputFile, "temp")
 
 	# Object Detect & Segmentation
-	checked_file = getODandSeg(inputFile, model) # Get OD Data
+	[coord, str_tag, number_tag, score, rect_files, additional_infor, n_color]  = getODandSegment(inputFile, od_model)
+	print("Loading Finished")
 	
 	# Wall Detection with input image.
-	model = pspnet_50_ADE_20K()
-	wall_divided = segmentation.detect_wall_floor(inputFile, model)
+	wall_divided = segmentation.detect_wall_floor(inputFile, detection_model)
 	wall_total, wall_number = matrix_processing.divided_class_into_class_total(wall_divided)
-	preferWallColor = print("Pre calculated color files with ", preferenceImages)
-	preferFloorColor = print("Pre calculated color files with ", preferenceImages)
-	selectedPreferenceImage = print("위의 두 color를 가지는 selectedPreferenceImage 혹은 그냥 다른 이미지여도 좋음.")
-	# Select 2 color of above to preferWallColor and preferFloorColor
+	print("Wall Divided.")
+	
+	# Get preference image`s data.
+	preferWallColor = []
+	preferFloorColor = []
+	selectedPreferenceImages = []
+	[files, domColors, wallColors, floorColors] = utility.load_result(config.RESEARCH_BASE_FILE)	# Each files` dom color, wall color, floor color will be saved.
+	baseNameFiles = [os.path.basename(files[f]) for f in range(len(files))]
 
+	print("Wall Color start.")
+	# Select 2 color of above to preferWallColor and preferFloorColor
+	for i in range(MAX_WALL_IMAGE):
+		indx = random.randint(0, len(preferenceImages) - 1)
+		preferImage = preferenceImages[indx]
+		loadIndex = baseNameFiles.index(os.path.basename(preferImage))	# We do only compare with base name.
+		preferWallColor.append(wallColors[loadIndex])
+		preferFloorColor.append(floorColors[loadIndex])
+		selectedPreferenceImages.append(files[loadIndex])
+	
+	print("Wall Colored Selected.")
 	# Change wall & floor
 	wfColorChangeImage = []
 	for i in range(MAX_WALL_IMAGE):
 		wfOutputFile = changeWallFloor(inputFile, outputFile, wall_divided, wall_total, wall_number, i, preferWallColor, preferFloorColor)
 		wfColorChangeImage.append(wfOutputFile)
-
+	print("Wall Color Changed")
+	
+	wfColorChangeImage = utility.get_filenames("Image/example/temp")
 	# Change Object ( Table and Chair )
 	partChangedFiles = []
-	[coord, str_tag, number_tag, score, rect_files, additional_infor, n_color] = utility.get_od_data(checked_file)
-
+	
 	for i in range(MAX_WALL_IMAGE):
 		for j in range(MAX_PART_CHANGE_IMAGE):
+			print("now ", i * 2 + j)
+			selectedPreferenceImage = selectedPreferenceImages[random.randint(0, len(selectedPreferenceImages) - 1)]
 			partChangedOutFile = getPartChangedImage(wfColorChangeImage[i], outputFile, str_tag, coord, rect_files, selectedPreferenceImage, i, j)
 			partChangedFiles.append(partChangedOutFile)
 	
-
+	print("Part Changed Finished")
 	# Add some plant.
-	partChangedFiles = print() # Image number will not be changed.
+	# partChangedFiles = print() # Image number will not be changed.
 
+	partChangedFiles = utility.get_filenames("Image/example/temp")
 	# Change Light
 	for i in range(MAX_OUT_IMAGE):
+		print("Now Proceed : ", i)
+		files = utility.add_name(partChangedFiles[i], "_lighter")
 		if random.randint(1, MAX_OUT_IMAGE) > 4:
 			changed_file = styler.get_light_change(partChangedFiles[i], baseLight, changeLight)
 		else:
 			changed_file = styler.get_light_change(partChangedFiles[i], baseLight, baseLight)
-		utility.save_image(changed_file, partChangedFiles[i])
+		utility.save_image(changed_file, files)
 	# partChangedFiles 가 결국 바뀐 파일들
 
 def get_color_system(directory):
@@ -575,10 +615,17 @@ if __name__ == "__main__":
 		print(admitableFiles[admitableColor.index(ad)])
 		utility.print_image(utility.color_to_image(ad))
 	'''
+	'''
 	inputFile = "Image/Interior/interior7/interior7_0.jpg"
 	inputDataFile = RESEARCH_BASE_DIR + '/' + utility.add_name(inputFile.split("/")[-1], "_userInput", extension="bin")
 	destFile = "Image/example/Sofa/s1.jpg"
 	styleTransfer(inputFile, inputDataFile, destFile)
+	'''
+	#model_name = '1'
+	#od_model = objectDetector.load_model(model_name)
+	#getStyleChangedImage("Image/example/interior7.jpg", ["interior (35).jpg", "interior (40).jpg", "interior (13).jpg"], od_model)
+	getStyleChangedImage("Image/example/interior7.jpg", ["interior (35).jpg", "interior (40).jpg", "interior (13).jpg"], "")
+
 	'''
 	files = utility.get_filenames("C:/workspace/IOU-ML/Image/InteriorImage/test_furniture/total")
 	index = 0
@@ -594,11 +641,6 @@ if __name__ == "__main__":
 	outputFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "_divided")
 	outputDataFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "", extension="bin")
 	segment(fileName, outputFile, outputDataFile, total=True)
-	'''
-
-
-	'''
-
 	'''
 	'''
 	# Load ML Module and Read - Do ML Job
