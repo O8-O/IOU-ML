@@ -10,15 +10,16 @@ from PyQt5.QtCore import Qt
 import config
 
 # File Name global variale
+#608, 580, 543, 333*
 RESEARCH_BASE_DIR = config.RESEARCH_BASE_DIR
-IMAGE_NAME = "C:/MLDATA/interior7/interior7_2.jpg" 
-OUTPUT_FILE = RESEARCH_BASE_DIR + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "_divided")
+IMAGE_NAME = "C:/MLDATA/interior (333)/interior (333)_0.jpg" 
+OUTPUT_FILE = RESEARCH_BASE_DIR + "/interior (333)" + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "_divided")
 SEG_FILE_NAME = RESEARCH_BASE_DIR + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "", extension="bin")
 SEG_SAVE_NAME = RESEARCH_BASE_DIR + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "_userInput", extension="bin")
 # Constant
 CHANGE_DIVIED = "Image/example/temp.jpg"
 
-# Init Global Data for classify segmentation.
+# Init Global Data for classify segmentation
 totalClass = [[]]
 nowIndex = 0
 eraseMode = False

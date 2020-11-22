@@ -161,7 +161,8 @@ def add_up_image_to(image, add_image, min_x, max_x, min_y, max_y):
 			
 	for y in range(min_y, max_y):
 		for x in range(min_x, max_x):
-			output_image[y][x] = resize_add_image[y - min_y][x - min_x]
+			if x < width and y < height and x >= 0 and y >= 0:
+				output_image[y][x] = resize_add_image[y - min_y][x - min_x]
 	
 	return output_image
 

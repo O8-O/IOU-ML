@@ -11,6 +11,7 @@ import time
 import numpy as np
 import config
 import imageClassifier
+import subprocess
 import os
 
 from keras_segmentation.pretrained import pspnet_50_ADE_20K 
@@ -367,8 +368,6 @@ def getODandSegment(inputFile, od_model):
 
 def changeWallFloor(inputFile, outputFile, wall_divided, wall_total, wall_number, i, preferWallColor, preferFloorColor):
 	wfOutputFile = utility.add_name(outputFile, "_wfColor" + str(i))
-	print(preferWallColor)
-	print(preferFloorColor)
 	styler.change_dest_color(inputFile, wfOutputFile, preferWallColor[i], \
 		wall_divided, wall_total, [wall_total[wall_number.index(segmentation.WALL_CLASS)][0]])
 	styler.change_dest_color(wfOutputFile, wfOutputFile, preferFloorColor[i], \
@@ -419,16 +418,18 @@ def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,2
 	baseNameFiles = [os.path.basename(files[f]) for f in range(len(files))]
 
 	print("Wall Color start.")
+	indx = list(range(0, len(preferenceImages)))
+	random.shuffle(indx)
 	# Select 2 color of above to preferWallColor and preferFloorColor
 	for i in range(MAX_WALL_IMAGE):
-		indx = random.randint(0, len(preferenceImages) - 1)
-		preferImage = preferenceImages[indx]
+		ind = indx[i]
+		preferImage = preferenceImages[ind]
 		loadIndex = baseNameFiles.index(os.path.basename(preferImage))	# We do only compare with base name.
 		preferWallColor.append(wallColors[loadIndex])
 		preferFloorColor.append(floorColors[loadIndex])
 		selectedPreferenceImages.append(files[loadIndex])
-	
 	print("Wall Colored Selected.")
+
 	# Change wall & floor
 	wfColorChangeImage = []
 	for i in range(MAX_WALL_IMAGE):
@@ -436,17 +437,42 @@ def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,2
 		wfColorChangeImage.append(wfOutputFile)
 	print("Wall Color Changed")
 	
-	wfColorChangeImage = utility.get_filenames("Image/example/temp")
 	# Change Object ( Table and Chair )
+
+	startTime = time.time()
 	partChangedFiles = []
-	
+	procs = []
 	for i in range(MAX_WALL_IMAGE):
 		for j in range(MAX_PART_CHANGE_IMAGE):
-			print("now ", i * 2 + j)
+			print("now ", MAX_PART_CHANGE_IMAGE * i + j)
+			# 넘겨줄 인자를 저장하고, Thread를 실행시켜서 속도 향상.
+			argvFile = utility.add_name(config.SUBPROCESS_ARGV, "_" + str(MAX_PART_CHANGE_IMAGE * i + j))
+			utility.save_result([selectedPreferenceImages, wfColorChangeImage, outputFile, str_tag, coord, rect_files, i, j], argvFile)
+
+			proc = subprocess.Popen(['python', 'getPartChangedImage.py', argvFile], shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, encoding="cp949")
+			procs.append(proc)
+
+	for i in range(len(procs)):
+		print("Now ", i, " is running.")
+		out = procs[i].communicate()[0]
+		partChangedFiles.append(str(out).split("\n")[-1])
+
+	endTime = time.time()
+	'''
+	print("After change with thread, time : ", endTime - startTime)
+	startTime = time.time()
+	partChangedFiles = []
+	for i in range(MAX_WALL_IMAGE):
+		for j in range(MAX_PART_CHANGE_IMAGE):
+			print("now ", j * i + j)
+			# 기존 변경 전 코드
 			selectedPreferenceImage = selectedPreferenceImages[random.randint(0, len(selectedPreferenceImages) - 1)]
 			partChangedOutFile = getPartChangedImage(wfColorChangeImage[i], outputFile, str_tag, coord, rect_files, selectedPreferenceImage, i, j)
 			partChangedFiles.append(partChangedOutFile)
+	endTime = time.time()
 	
+	print("Before change with thread, time : ", endTime - startTime)
+	'''
 	print("Part Changed Finished")
 	# Add some plant.
 	# partChangedFiles = print() # Image number will not be changed.
@@ -623,8 +649,34 @@ if __name__ == "__main__":
 	'''
 	#model_name = '1'
 	#od_model = objectDetector.load_model(model_name)
-	#getStyleChangedImage("Image/example/interior7.jpg", ["interior (35).jpg", "interior (40).jpg", "interior (13).jpg"], od_model)
-	getStyleChangedImage("Image/example/interior7.jpg", ["interior (35).jpg", "interior (40).jpg", "interior (13).jpg"], "")
+	# Version Wood floor and blue..
+	inputFiles = [
+		"Image/example/interior (608).jpg",
+		"Image/example/interior (637).jpg",
+	]
+	for inputFile in inputFiles:
+		print(inputFile)
+		getStyleChangedImage(inputFile, ["interior (84).jpg", "interior (40).jpg", "interior (82).jpg"], "")
+	'''
+
+	model_name = '1'
+	od_model = objectDetector.load_model(model_name)
+	inputFiles = [
+		"Image/example/interior (54).jpg",
+		"Image/example/interior (283).jpg",
+		"Image/example/interior (289).jpg",
+		"Image/example/interior (333).jpg",
+		"Image/example/interior (543).jpg",
+		"Image/example/interior (580).jpg",
+		"Image/example/interior (608).jpg",
+		"Image/example/interior (637).jpg",
+	]
+	for inputFile in inputFiles:
+		print(inputFile)
+		[coord, str_tag, number_tag, score, rect_files, additional_infor, n_color]  = getODandSegment(inputFile, od_model)
+
+
+	'''
 
 	'''
 	files = utility.get_filenames("C:/workspace/IOU-ML/Image/InteriorImage/test_furniture/total")
