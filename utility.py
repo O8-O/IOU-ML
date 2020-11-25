@@ -147,6 +147,34 @@ def get_remarkable_color_n(color_list, n, convert_rgb=False):
 		result_color = [cv2.cvtColor(np.array([[result_color[i]]], dtype="uint8"), cv2.COLOR_BGR2RGB).tolist()[0][0] for i in range(len(result_color))]
 	return result_color
 
+# 좌표 변환
+def change_coord(coord, ratio=(0.5, 0.5)):
+	# coord 좌표를 ratio 비율만큼 변화시킨다.
+	return (int(coord[0] * ratio[0]), int(coord[1] * ratio[1]))
+
+def get_relative_ratio(width, height, dstWidth, dstHeight):
+	return (dstWidth / width, dstHeight / height)
+
+def change_class_total_with_ratio(class_total, ratio=(0.5, 0.5)):
+	ret_class_total = []
+	for ct in class_total:
+		change_ct = change_coord(ct, ratio)
+		if change_ct not in ret_class_total:
+			ret_class_total.append(change_ct)
+	return ret_class_total
+
+def resize_image(image, ratio=(0.5, 0.5)):
+	(height, width, _) = image.shape
+	retWidth = int(width * ratio[0])
+	retHeight = int(height * ratio[1])
+	retImage = np.zeros((retHeight, retWidth, 3), dtype=np.uint8)
+
+	for h in range(retHeight):
+		for w in range(retWidth):
+			retImage[h][w] = image[int(h * ratio[1])][int(w * ratio[0])]
+
+	return retImage
+
 # Print 함수들
 def print_list_sparse(li, height, width, density=7):
 	'''

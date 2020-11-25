@@ -368,6 +368,7 @@ def getODandSegment(inputFile, od_model):
 
 def changeWallFloor(inputFile, outputFile, wall_divided, wall_total, wall_number, i, preferWallColor, preferFloorColor):
 	wfOutputFile = utility.add_name(outputFile, "_wfColor" + str(i))
+	# TODO : change_dest_color need to be checked with ratio.
 	styler.change_dest_color(inputFile, wfOutputFile, preferWallColor[i], \
 		wall_divided, wall_total, [wall_total[wall_number.index(segmentation.WALL_CLASS)][0]])
 	styler.change_dest_color(wfOutputFile, wfOutputFile, preferFloorColor[i], \
@@ -403,10 +404,12 @@ def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,2
 
 	# Object Detect & Segmentation
 	[coord, str_tag, number_tag, score, rect_files, additional_infor, n_color]  = getODandSegment(inputFile, od_model)
+	# TODO : coord need to be checked with ratio.
 	print("Loading Finished")
 	
 	# Wall Detection with input image.
 	wall_divided = segmentation.detect_wall_floor(inputFile, detection_model)
+	# TODO : wall_divided need to be checked with ratio.
 	wall_total, wall_number = matrix_processing.divided_class_into_class_total(wall_divided)
 	print("Wall Divided.")
 	
@@ -541,7 +544,7 @@ def image_color_match(inputImage):
 	
 	return admitableColors, admitableFiles
 
-def checkInput():
+def checkInput(detection_model):
 	with open(FILE_INQUEUE, 'r') as f:
 		lines = f.readline()
 	
@@ -555,7 +558,7 @@ def checkInput():
 	while i < len(lines):
 		while lines[i] not in functionList and i < len(lines):
 			i += 1
-		output = doJob(lines[functionIndex:i])
+		output = doJob(lines[functionIndex:i], detection_model)
 		# Write Output Data.
 		if output != None:
 			with open(FILE_OUTQUEUE, 'a') as f:
@@ -565,88 +568,18 @@ def checkInput():
 		
 		functionIndex = i
 		
-def doJob(argv):			
+def doJob(argv, detection_model):			
 	func = argv[0]
 	options = argv[1:]
-	if func == "segment":
-		option_check(options, 3)
-		segment(options[0], options[1], options[2])
-	elif func == "colorTransferToCoord":
-		option_check(options, 5)
-		bgr_color = change_hex_color_to_bgr(options[3])
-		coord = []
-		for str_coord in options[4:]:
-			coord.append(change_str_to_coord(str_coord))
-		colorTransferToCoord(options[0], options[1], options[2], bgr_color, coord)
-	elif func == "colorTransferToColor":
-		option_check(options, 5)
-		bgr_color_des = change_hex_color_to_bgr(options[3])
-		bgr_color_src = change_hex_color_to_bgr(options[4])
-		colorTransferToColor(options[0], options[1], options[2], bgr_color_des, bgr_color_src)
-	elif func == "colorTransferWithImage":
-		option_check(options, 4)
-		colorTransferWithImage(options[0], options[1], options[2], options[3])
-	elif func == "textureTransferToCoord":
-		option_check(options, 5)
-		coord = []
-		for str_coord in options[4:]:
-			coord.append(change_str_to_coord(str_coord))
-		textureTransferToCoord(options[0], options[1], options[2], options[3], coord)
-	elif func == "textureTransferArea":
-		option_check(options, 5)
-		bgr_color = change_hex_color_to_bgr(options[4])
-		textureTransferArea(options[0], options[1], options[2], options[3], bgr_color)
-	elif func == "getFurnitureShape":
-		option_check(options, 3)
-		getFurnitureShape(options[0], options[1], options[2])
-	elif func == "getDominantColor":
-		option_check(options, 1)
-		getDominantColor(options[0])
-	elif func == "styleTransfer":
-		option_check(options, 3)
-		styleTransfer(options[0], options[1], options[2])
-	elif func == "getStyleChangedImage":
+	if func == "getStyleChangedImage":
 		option_check(options, 2)
-		# Check Whether Preference.
-		label_data = utility.get_label_files()
-		label = [0, 0, 0, 0]
-		label_file = ["label0", "label1", "label2", "label3"]
-
-		if len(options) == 2 and len(options[1]) == 0:
-			max_index = 0
-		else:
-			# 어느 라벨에 속하는지 검사.
-			for i in range(1, len(options)):
-				base_file = options[i].split("/")[-1]
-				for i in range(len(label_data)):
-					if base_file in label_data[i]:
-						label[i] += 1
-			
-			max_index = 0
-			for i in range(len(label)):
-				if label[i] > label[max_index]:
-					max_index = i
+		lightRGB = options[1].spilt(" ")
+		light = [lightRGB[2], lightRGB[1], lightRGB[0]]	# RGB to BGR.
 
 		# 해당 라벨에 속하는 file로 image를 처리.
-		return getStyleChangedImage(options[0], utility.get_filenames("C:/workspace/IOU-Backend/util/IOU-ML/Image/InteriorImage/test/" + label_file[max_index]))
+		return getStyleChangedImage(options[0], options[2:], detection_model, baseLight=light)
 
 if __name__ == "__main__":
-	'''
-	test_image_directory = "C:/workspace/IOU-ML/Image/InteriorImage/test_only_image"
-	testFile = utility.get_filenames(test_image_directory)
-	# get_color_system(test_image_directory)
-	print(testFile[0])
-	admitableColor, admitableFiles = image_color_match(testFile[0])
-	for ad in admitableColor:
-		print(admitableFiles[admitableColor.index(ad)])
-		utility.print_image(utility.color_to_image(ad))
-	'''
-	'''
-	inputFile = "Image/Interior/interior7/interior7_0.jpg"
-	inputDataFile = RESEARCH_BASE_DIR + '/' + utility.add_name(inputFile.split("/")[-1], "_userInput", extension="bin")
-	destFile = "Image/example/Sofa/s1.jpg"
-	styleTransfer(inputFile, inputDataFile, destFile)
-	'''
 	#model_name = '1'
 	#od_model = objectDetector.load_model(model_name)
 	# Version Wood floor and blue..
@@ -657,43 +590,7 @@ if __name__ == "__main__":
 	for inputFile in inputFiles:
 		print(inputFile)
 		getStyleChangedImage(inputFile, ["interior (84).jpg", "interior (40).jpg", "interior (82).jpg"], "")
-	'''
 
-	model_name = '1'
-	od_model = objectDetector.load_model(model_name)
-	inputFiles = [
-		"Image/example/interior (54).jpg",
-		"Image/example/interior (283).jpg",
-		"Image/example/interior (289).jpg",
-		"Image/example/interior (333).jpg",
-		"Image/example/interior (543).jpg",
-		"Image/example/interior (580).jpg",
-		"Image/example/interior (608).jpg",
-		"Image/example/interior (637).jpg",
-	]
-	for inputFile in inputFiles:
-		print(inputFile)
-		[coord, str_tag, number_tag, score, rect_files, additional_infor, n_color]  = getODandSegment(inputFile, od_model)
-
-
-	'''
-
-	'''
-	files = utility.get_filenames("C:/workspace/IOU-ML/Image/InteriorImage/test_furniture/total")
-	index = 0
-	for fileName in files:
-		print("Now Process ", index, " / " , len(files))
-		outputFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "_divided")
-		outputDataFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "", extension="bin")
-		segment(fileName, outputFile, outputDataFile)
-		index += 1
-	'''
-	'''
-	fileName = "Image/example/interior1.jpg"
-	outputFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "_divided")
-	outputDataFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "", extension="bin")
-	segment(fileName, outputFile, outputDataFile, total=True)
-	'''
 	'''
 	# Load ML Module and Read - Do ML Job
 	# Model name 1 mean dataset`s folder 1.
@@ -706,7 +603,7 @@ if __name__ == "__main__":
 		nowTime = time.time()
 		# 매 2초 혹은 7초마다 5초마다 검사한다.
 		if nowTime % 10 == 2 or nowTime % 10 == 7:
-			checkInput()
+			checkInput(detection_model)
 		else:
 			time.sleep(1)	# 1초간 휴식
 	'''

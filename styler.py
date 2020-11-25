@@ -22,9 +22,10 @@ def set_style(content_image_name, style_image_name):
 	return outputs[0]
 
 def set_color_with_color(content_image_name, stlye_color, a=5, b=1, change_style="median", light_color=[255, 255, 255]):
+	# TODO : set_color_with_color need to be checked with ratio.
 	# Style Color need to be RGB Color.
 	img = cv2.imread(content_image_name)
-	# img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+	# TODO : read image need to be resize with ratio.
 	(height, width, _) = img.shape
 	styled_image = np.zeros(img.shape, dtype=np.uint8)
 
@@ -86,6 +87,7 @@ def set_color_with_image(input_file, color_file, mask_map, decrease_ratio=(0.1, 
 	return part_change_image
 
 def change_dest_color(input_file, output_file, setting_color, divided_class, class_total, touch_list, a=5, b=1, change_style="median", save_flag=True):
+	# TODO : change_dest_color need to be checked with ratio.
 	colored_image = set_color_with_color(input_file, setting_color, a=a, b=b, change_style=change_style)
 
 	ret_class_total	= utility.get_class_with_given_coord(class_total, touch_list)
