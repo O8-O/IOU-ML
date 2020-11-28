@@ -8,8 +8,6 @@ import tensorflow as tf
 import shutil
 import config
 
-from tensorflow.python.eager.context import internal_operation_seed
-
 dir_x = [0, 0, 1, -1]
 dir_y = [1, -1, 0, 0]
 
@@ -171,9 +169,33 @@ def resize_image(image, ratio=(0.5, 0.5)):
 
 	for h in range(retHeight):
 		for w in range(retWidth):
-			retImage[h][w] = image[int(h * ratio[1])][int(w * ratio[0])]
+			retImage[h][w] = image[int(h * ( 1 / ratio[1]))][int(w * ( 1 / ratio[0]))]
 
 	return retImage
+
+def resize_2darr(image, ratio=(0.5, 0.5)):
+	(height, width) = image.shape
+	retWidth = int(width * ratio[0])
+	retHeight = int(height * ratio[1])
+	retImage = np.zeros((retHeight, retWidth), dtype=np.uint8)
+
+	for h in range(retHeight):
+		for w in range(retWidth):
+			retImage[h][w] = get_exist_value(image, h, w, ratio, func="average")
+
+	return retImage
+
+def get_exist_value(src, h, w, ratio, func="leftTop"):
+	exist_h = int(h * ( 1 / ratio[1]))
+	exist_w = int(w * ( 1 / ratio[0]))
+
+	if func=="average":
+		exist_hn = int((h + 1) * ( 1 / ratio[1]))
+		exist_wn = int((w + 1) * ( 1 / ratio[1]))
+		exist_h = int((exist_h + exist_hn)/ 2)
+		exist_w = int((exist_w + exist_wn)/ 2)
+
+	return src[exist_h][exist_w]
 
 # Print 함수들
 def print_list_sparse(li, height, width, density=7):
@@ -366,7 +388,7 @@ def tag_classifier(input_class):
 	# Get only our interested feature.
 	class_number = [15, 33, 44, 46, 47, 48, 49, 50, 51, 58, 62, 63, 64, 65, 67, 70, 72, 73, 74, 75, 76, 78, 79, 80, 81, 82, 84, 85, 86, 89]
 	class_tag = ["bench", "suitcase", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "table", "chair", "couch", "potted plant", \
-		"bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "microwave", "oven", "toaster", "sink", "refrigerator", "book", \
+		"bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "microwave", "oven", "toaster", "sink", "refrigeratioor", "book", \
 		"clock", "vase", "hair drier"]
 	if input_class in class_number:
 		return class_tag[class_number.index(input_class)]

@@ -1,4 +1,3 @@
-from tensorflow.python import util
 import styler
 import segmentation
 import image_processing
@@ -26,6 +25,7 @@ COLOR_SYSTEM_FILE = "colorSystem.bin"
 RESEARCH_BASE_DIR = config.RESEARCH_BASE_DIR
 functionList = ["getStyleChangedImage"]
 detection_model = None
+destSize = (640, 925) # width, height
 
 def segment(inputFile, outputFile, outputDataFile, total=False) :
 	'''
@@ -366,7 +366,7 @@ def getODandSegment(inputFile, od_model):
 				segment(rect_files[i], utility.add_name(rect_files[i], "_divided"), rect_data_file)
 	return [coord, str_tag, number_tag, score, rect_files, additional_infor, n_color] 
 
-def changeWallFloor(inputFile, outputFile, wall_divided, wall_total, wall_number, i, preferWallColor, preferFloorColor):
+def changeWallFloor(inputFile, outputFile, wall_divided, wall_total, wall_number, i, preferWallColor, preferFloorColor, ratio=(0.5, 0.5)):
 	wfOutputFile = utility.add_name(outputFile, "_wfColor" + str(i))
 	# TODO : change_dest_color need to be checked with ratio.
 	styler.change_dest_color(inputFile, wfOutputFile, preferWallColor[i], \
@@ -375,9 +375,11 @@ def changeWallFloor(inputFile, outputFile, wall_divided, wall_total, wall_number
 		wall_divided, wall_total, [wall_total[wall_number.index(segmentation.FLOOR_CLASS)][0]])
 	return wfOutputFile
 
-def getPartChangedImage(inputFile, outputFile, str_tag, coord, rect_files, selectedPreferenceImage, i, j):
+def getPartChangedImage(inputFile, outputFile, str_tag, coord, rect_files, selectedPreferenceImage, i, j, ratio=(0.5, 0.5)):
 	partChangedOutFile = utility.add_name(outputFile, "_changed_" + str(i) + str(j))
+	# TODO : getPartChangedImage need to be checked with ratio.
 	original_image = utility.read_image(inputFile)
+	
 
 	for k in range(len(str_tag)):
 		if ( str_tag[k] == "sofa" or str_tag[k] == "chair" ):
@@ -399,20 +401,29 @@ def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,2
 	입력 Color는 BGR ( [178, 220, 240] 은 주황불빛 )
 	preferenceImages 가 4장만 되어도 충분함.
 	'''
+	# Input File : C:\\Users\\KDW\\Desktop\\KOO\\upload\\2020-11-21T06.625Zinterior (70).jpg
+	inputBaseFile = inputFile.split("Z")[-1]
+	preferenceBaseFile = [preferenceImages[i].split("Z")[-1] for i in range(len(preferenceImages))]
+
 	detection_model = pspnet_50_ADE_20K()
 	outputFile = utility.get_add_dir(inputFile, "temp")
 
 	# Object Detect & Segmentation
 	[coord, str_tag, number_tag, score, rect_files, additional_infor, n_color]  = getODandSegment(inputFile, od_model)
-	# TODO : coord need to be checked with ratio.
+
+	(imgHeight, imgWidth, _) = utility.read_image(inputFile).shape
+	if imgWidth > destSize[0] and imgHeight > destSize[1]:
+		ratio = (destSize[0] / imgWidth, destSize[1] / imgHeight)
+	else:
+		ratio = (1, 1)
 	print("Loading Finished")
 	
 	# Wall Detection with input image.
 	wall_divided = segmentation.detect_wall_floor(inputFile, detection_model)
-	# TODO : wall_divided need to be checked with ratio.
+	wall_divided = utility.resize_2darr(wall_divided, ratio=ratio)
 	wall_total, wall_number = matrix_processing.divided_class_into_class_total(wall_divided)
 	print("Wall Divided.")
-	
+
 	# Get preference image`s data.
 	preferWallColor = []
 	preferFloorColor = []
@@ -436,13 +447,12 @@ def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,2
 	# Change wall & floor
 	wfColorChangeImage = []
 	for i in range(MAX_WALL_IMAGE):
-		wfOutputFile = changeWallFloor(inputFile, outputFile, wall_divided, wall_total, wall_number, i, preferWallColor, preferFloorColor)
+		wfOutputFile = changeWallFloor(inputFile, outputFile, wall_divided, wall_total, wall_number, i, preferWallColor, preferFloorColor, ratio=ratio)
 		wfColorChangeImage.append(wfOutputFile)
 	print("Wall Color Changed")
 	
 	# Change Object ( Table and Chair )
 
-	startTime = time.time()
 	partChangedFiles = []
 	procs = []
 	for i in range(MAX_WALL_IMAGE):
@@ -450,8 +460,9 @@ def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,2
 			print("now ", MAX_PART_CHANGE_IMAGE * i + j)
 			# 넘겨줄 인자를 저장하고, Thread를 실행시켜서 속도 향상.
 			argvFile = utility.add_name(config.SUBPROCESS_ARGV, "_" + str(MAX_PART_CHANGE_IMAGE * i + j))
-			utility.save_result([selectedPreferenceImages, wfColorChangeImage, outputFile, str_tag, coord, rect_files, i, j], argvFile)
+			utility.save_result([selectedPreferenceImages, wfColorChangeImage, outputFile, str_tag, coord, rect_files, i, j, ratio], argvFile)
 
+			# Subprocess need to calculate with given ratio.
 			proc = subprocess.Popen(['python', 'getPartChangedImage.py', argvFile], shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, encoding="cp949")
 			procs.append(proc)
 
@@ -460,22 +471,6 @@ def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,2
 		out = procs[i].communicate()[0]
 		partChangedFiles.append(str(out).split("\n")[-1])
 
-	endTime = time.time()
-	'''
-	print("After change with thread, time : ", endTime - startTime)
-	startTime = time.time()
-	partChangedFiles = []
-	for i in range(MAX_WALL_IMAGE):
-		for j in range(MAX_PART_CHANGE_IMAGE):
-			print("now ", j * i + j)
-			# 기존 변경 전 코드
-			selectedPreferenceImage = selectedPreferenceImages[random.randint(0, len(selectedPreferenceImages) - 1)]
-			partChangedOutFile = getPartChangedImage(wfColorChangeImage[i], outputFile, str_tag, coord, rect_files, selectedPreferenceImage, i, j)
-			partChangedFiles.append(partChangedOutFile)
-	endTime = time.time()
-	
-	print("Before change with thread, time : ", endTime - startTime)
-	'''
 	print("Part Changed Finished")
 	# Add some plant.
 	# partChangedFiles = print() # Image number will not be changed.
@@ -582,10 +577,8 @@ def doJob(argv, detection_model):
 if __name__ == "__main__":
 	#model_name = '1'
 	#od_model = objectDetector.load_model(model_name)
-	# Version Wood floor and blue..
 	inputFiles = [
-		"Image/example/interior (608).jpg",
-		"Image/example/interior (637).jpg",
+		"Image/example/interior7.jpg",
 	]
 	for inputFile in inputFiles:
 		print(inputFile)
