@@ -1,7 +1,6 @@
 import mlWrapper
 import utility
 import sys
-import config
 import random
 
 # To use, 2번째 인자에 리스트들을 담아서 넘겨주면 된다.

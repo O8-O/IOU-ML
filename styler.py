@@ -21,16 +21,16 @@ def set_style(content_image_name, style_image_name):
 	outputs = hub_module(tf.constant(content_image), tf.constant(style_image))
 	return outputs[0]
 
-def set_color_with_color(content_image_name, stlye_color, a=5, b=1, change_style="median", light_color=[255, 255, 255]):
-	# TODO : set_color_with_color need to be checked with ratio.
+def set_color_with_color(content_image_name, stlye_color, a=5, b=1, change_style="median", light_color=[255, 255, 255], ratio=(1.0, 1.0)):
 	# Style Color need to be RGB Color.
 	img = cv2.imread(content_image_name)
-	# TODO : read image need to be resize with ratio.
+	img = utility.resize_image(img, ratio=ratio)
 	(height, width, _) = img.shape
 	styled_image = np.zeros(img.shape, dtype=np.uint8)
 
 	grayscale_input = cv2.imread(content_image_name, cv2.IMREAD_GRAYSCALE)
-	stlye_color = lighter(stlye_color, limit=360)
+	grayscale_input = utility.resize_2darr(grayscale_input, ratio=ratio)
+	stlye_color = lighter(stlye_color, limit=270)
 
 	for h in range(height):
 		for  w in range(width):
@@ -86,12 +86,15 @@ def set_color_with_image(input_file, color_file, mask_map, decrease_ratio=(0.1, 
 	part_change_image = image_processing.add_up_image(original_image, source, all_class_total, width, height)
 	return part_change_image
 
-def change_dest_color(input_file, output_file, setting_color, divided_class, class_total, touch_list, a=5, b=1, change_style="median", save_flag=True):
-	# TODO : change_dest_color need to be checked with ratio.
-	colored_image = set_color_with_color(input_file, setting_color, a=a, b=b, change_style=change_style)
+def change_dest_color(input_file, output_file, setting_color, divided_class, class_total, touch_list, touch_hint=None, a=5, b=1, change_style="median", save_flag=True, ratio=(1.0, 1.0)):
+	colored_image = set_color_with_color(input_file, setting_color, a=a, b=b, change_style=change_style, ratio=ratio)
 
-	ret_class_total	= utility.get_class_with_given_coord(class_total, touch_list)
+	if touch_hint == None:
+		ret_class_total	= utility.get_class_with_given_coord(class_total, touch_list)
+	else:
+		ret_class_total = class_total[touch_hint]
 	original_image = utility.read_image(input_file)
+	original_image = utility.resize_image(original_image, ratio=ratio)
 	(height, width, _) = original_image.shape
 
 	# Change ret_class_total`s part with colored image.

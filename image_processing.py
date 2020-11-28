@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-from numpy.lib import utils
 from sklearn.cluster import KMeans
 
 def get_only_instance_image(input_file, mask, width, height, show=False):
@@ -116,13 +115,18 @@ def get_class_color(image, class_total, class_count, color_function=get_average_
 	return class_color
 
 def add_up_image(original_image, add_image, add_coord, width, height):
-	output_image = np.zeros([height, width, 3], dtype=np.uint8)
-	for h in range(height):
-		for w in range(width):
+	output_image = np.zeros(original_image.shape, dtype=np.uint8)
+	(he, wi, _) = output_image.shape
+	for h in range(he):
+		for w in range(wi):
 			output_image[h][w] = original_image[h][w]
+	
 	for coord in add_coord:
-		if coord[0] < width and coord[1] < height and coord[0] >= 0 and coord[1] >= 0:
-			output_image[coord[1]][coord[0]] = add_image[coord[1]][coord[0]]
+		try:
+			if coord[0] < wi and coord[1] < he and coord[0] >= 0 and coord[1] >= 0:
+				output_image[coord[1]][coord[0]] = add_image[coord[1]][coord[0]]
+		except:
+			continue
 	return output_image
 
 def get_dominant_color(image, clusters=20):
@@ -148,7 +152,7 @@ def add_up_image_to(image, add_image, min_x, max_x, min_y, max_y):
 	(original_h, original_w, _) = image.shape
 	width = max_x - min_x
 	height = max_y - min_y
-	
+
 	if add_h * add_w > width * height:
 		resize_add_image = cv2.resize(add_image, (width, height), interpolation=cv2.INTER_AREA)
 	else:
@@ -158,11 +162,13 @@ def add_up_image_to(image, add_image, min_x, max_x, min_y, max_y):
 	for y in range(original_h):
 		for x in range(original_w):
 			output_image[y][x] = image[y][x]
-			
-	for y in range(min_y, max_y):
-		for x in range(min_x, max_x):
-			if x < width and y < height and x >= 0 and y >= 0:
-				output_image[y][x] = resize_add_image[y - min_y][x - min_x]
+	
+	for y in range(height):
+		for x in range(width):
+			try:
+				output_image[min_y + y][min_x + x] = resize_add_image[y][x]
+			except:
+				continue
 	
 	return output_image
 

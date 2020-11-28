@@ -150,6 +150,25 @@ def change_coord(coord, ratio=(0.5, 0.5)):
 	# coord 좌표를 ratio 비율만큼 변화시킨다.
 	return (int(coord[0] * ratio[0]), int(coord[1] * ratio[1]))
 
+def change_coords(coords, ratio=(0.5, 0.5)):
+	return [(int(coords[i][0] * ratio[0]), int(coords[i][1] * ratio[1])) for i in range(len(coords))]
+
+def changed_coords2d(coords, ratio=(0.5, 0.5)):
+	return [change_coords(coords[i], ratio=ratio) for i in range(len(coords))]
+
+def change_arrcoords(coords, ratio=(0.5, 0.5)):
+	resized_coords = []
+	for i in range(len(coords)):
+		resized_coords.append([])
+		for j in range(len(coords[i])):
+			# Order of x x y y
+			if j < 2:
+				resized_coords[i].append(coords[i][j] * ratio[0])
+			else:
+				resized_coords[i].append(coords[i][j] * ratio[1])
+				
+	return resized_coords
+
 def get_relative_ratio(width, height, dstWidth, dstHeight):
 	return (dstWidth / width, dstHeight / height)
 
@@ -169,7 +188,7 @@ def resize_image(image, ratio=(0.5, 0.5)):
 
 	for h in range(retHeight):
 		for w in range(retWidth):
-			retImage[h][w] = image[int(h * ( 1 / ratio[1]))][int(w * ( 1 / ratio[0]))]
+			retImage[h][w] = get_exist_value(image, h, w, ratio)
 
 	return retImage
 
@@ -181,7 +200,7 @@ def resize_2darr(image, ratio=(0.5, 0.5)):
 
 	for h in range(retHeight):
 		for w in range(retWidth):
-			retImage[h][w] = get_exist_value(image, h, w, ratio, func="average")
+			retImage[h][w] = get_exist_value(image, h, w, ratio)
 
 	return retImage
 
@@ -420,6 +439,7 @@ def get_class_with_given_coord(class_total, given_coord):
 		for cn in range(len(class_total)):
 			if coord in class_total[cn] and coord not in ret_class_total:
 				ret_class_total += class_total[cn]
+				break
 	
 	return ret_class_total
 
@@ -580,4 +600,18 @@ def get_bin(inputFile):
 
 def get_od_bin(inputFile):
 	return config.RESEARCH_BASE_DIR + '/' + inputFile.split("/")[-1].split(".")[0] + "_od.bin"
-	
+
+def file_basify(inputFile, preferenceImages):
+	# Input File : C:\\Users\\KDW\\Desktop\\KOO\\upload\\2020-11-21T06.625Zinterior (70).jpg
+	# Test 당시 InputFile Image/example/interior7.jpg, preferenceImage "interior (84).jpg", "interior (40).jpg", "interior (82).jpg"
+	if "\\" in inputFile:
+		inputBaseFile = inputFile.split("Z")[-1]
+		preferenceBaseFile = [preferenceImages[i].split("Z")[-1] for i in range(len(preferenceImages))]
+	else:
+		inputBaseFile = inputFile
+		preferenceBaseFile = preferenceImages
+	return inputBaseFile, preferenceBaseFile
+
+def logging(str_data):
+	with open("logging.txt", 'a') as f:
+		f.write(str_data + "\n")

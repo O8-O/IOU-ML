@@ -1,3 +1,4 @@
+from six import print_
 import styler
 import segmentation
 import image_processing
@@ -25,7 +26,8 @@ COLOR_SYSTEM_FILE = "colorSystem.bin"
 RESEARCH_BASE_DIR = config.RESEARCH_BASE_DIR
 functionList = ["getStyleChangedImage"]
 detection_model = None
-destSize = (640, 925) # width, height
+# destSize = (640, 925) # width, height
+destSize = (320, 460) # width, height
 
 def segment(inputFile, outputFile, outputDataFile, total=False) :
 	'''
@@ -121,7 +123,7 @@ def textureTransferArea(inputFile, inputDataFile, outputFileName, destTexture, s
 	destArea = styler.get_similar_color_area(divided_class, class_number, class_total, class_color, srcColor, 240) # Simmilar Color threshold to 200.
 	styler.change_area_style(inputFile, outputFileName, destTexture, destArea)
 
-def styleTransfer(inputFile, inputDataFile, destFile) :
+def styleTransfer(inputFile, inputDataFile, destFile, ratio=(1.0, 1.0)) :
 	'''
 	입력받은 inputFile의 색과 질감을 destFile의 색과 질감으로 임의로 변형해준다. 
 	'''
@@ -149,19 +151,30 @@ def styleTransfer(inputFile, inputDataFile, destFile) :
 	file_extension = "." + inputFile.split(".")[1]
 	file_base_name = inputFile.split(".")[0]
 	
-	input_sample = [class_total[i][0] for i in range(len(class_total))]
+	resized_class_total = utility.changed_coords2d(class_total, ratio=ratio)
+	# 중복 제거
+	temp_class_total = resized_class_total
+	resized_class_total = []
+	for tc in temp_class_total:
+		if tc not in resized_class_total:
+			resized_class_total.append(tc)
+			
+	input_sample = [resized_class_total[i][0] for i in range(len(resized_class_total))]
 	if len(input_sample) < MAX_CHANGE_COLOR:
 		input_sample *= int(MAX_CHANGE_COLOR // len(input_sample)) + 1 
 	dest_color = image_processing.get_dominant_color(destFile, clusters=8)
 
+	part_change_image = []
 	for i in range(MAX_OUT_IMAGE):
 		next_file_name = file_base_name + "_" + str(i) + file_extension
 		now_input_sample = random.sample(input_sample, MAX_CHANGE_COLOR)
 		now_dest_color = random.sample(dest_color, MAX_CHANGE_COLOR)
 		part_change_image = utility.read_image(inputFile)
+		part_change_image = utility.resize_image(part_change_image, ratio=ratio)
 		for j in range(MAX_CHANGE_COLOR):
-			change_image = styler.change_dest_color(inputFile, next_file_name, now_dest_color[j], divided_class, class_total, [now_input_sample[j]], save_flag=False)
-			part_change_image = image_processing.add_up_image(part_change_image, change_image, class_total[input_sample.index(now_input_sample[j])], width, height)
+			change_image = styler.change_dest_color(inputFile, next_file_name, now_dest_color[j], divided_class, resized_class_total,\
+				[now_input_sample[j]], save_flag=False, ratio=ratio)
+			part_change_image = image_processing.add_up_image(part_change_image, change_image, resized_class_total[input_sample.index(now_input_sample[j])], width, height)
 	return part_change_image
 
 def getFurnitureShape(inputFile, inputDataFile, outputFile):
@@ -272,9 +285,9 @@ def change_str_to_coord(coord_str):
 	'''
 	coord_str need to be form with (a,b)
 	'''
-	if "," not in coord_str and ( "(" == coord_str[0] and ")" == coord_to_image[-1]):
+	if "," not in coord_str and ( "(" == coord_str[0] and ")" == utility.coord_to_image[-1]):
 		raise Exception("OptionError : COORD_FORMAT_IS_NOT_FORMATTABLE");
-	[a, b] = coord_to_image[1:-1].split(",")
+	[a, b] = utility.coord_to_image[1:-1].split(",")
 	return (a, b)
 
 def getStyleChangedImage_past(inputFile, preferenceImages, tempdata="temp"):
@@ -368,18 +381,18 @@ def getODandSegment(inputFile, od_model):
 
 def changeWallFloor(inputFile, outputFile, wall_divided, wall_total, wall_number, i, preferWallColor, preferFloorColor, ratio=(0.5, 0.5)):
 	wfOutputFile = utility.add_name(outputFile, "_wfColor" + str(i))
-	# TODO : change_dest_color need to be checked with ratio.
 	styler.change_dest_color(inputFile, wfOutputFile, preferWallColor[i], \
-		wall_divided, wall_total, [wall_total[wall_number.index(segmentation.WALL_CLASS)][0]])
+		wall_divided, wall_total, [wall_total[wall_number.index(segmentation.WALL_CLASS)][0]],\
+		touch_hint=wall_number.index(segmentation.WALL_CLASS), ratio=ratio)
 	styler.change_dest_color(wfOutputFile, wfOutputFile, preferFloorColor[i], \
-		wall_divided, wall_total, [wall_total[wall_number.index(segmentation.FLOOR_CLASS)][0]])
+		wall_divided, wall_total, [wall_total[wall_number.index(segmentation.FLOOR_CLASS)][0]],\
+		touch_hint=wall_number.index(segmentation.FLOOR_CLASS))
 	return wfOutputFile
 
 def getPartChangedImage(inputFile, outputFile, str_tag, coord, rect_files, selectedPreferenceImage, i, j, ratio=(0.5, 0.5)):
 	partChangedOutFile = utility.add_name(outputFile, "_changed_" + str(i) + str(j))
-	# TODO : getPartChangedImage need to be checked with ratio.
 	original_image = utility.read_image(inputFile)
-	
+	resized_coord = utility.change_arrcoords(coord, ratio=ratio)
 
 	for k in range(len(str_tag)):
 		if ( str_tag[k] == "sofa" or str_tag[k] == "chair" ):
@@ -389,9 +402,9 @@ def getPartChangedImage(inputFile, outputFile, str_tag, coord, rect_files, selec
 				furniture_data_file = utility.get_userinput_bin(furniture_file)
 			else:
 				furniture_data_file = utility.get_bin(furniture_file)
-			styled_furniture = styleTransfer(furniture_file, furniture_data_file, selectedPreferenceImage)
+			styled_furniture = styleTransfer(furniture_file, furniture_data_file, selectedPreferenceImage, ratio=ratio)
 			original_image = image_processing.add_up_image_to(original_image, styled_furniture, \
-				int(coord[k][0]), int(coord[k][1]), int(coord[k][2]), int(coord[k][3]))
+				int(resized_coord[k][0]), int(resized_coord[k][1]), int(resized_coord[k][2]), int(resized_coord[k][3]))
 
 	utility.save_image(original_image, partChangedOutFile)
 	return partChangedOutFile
@@ -401,15 +414,14 @@ def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,2
 	입력 Color는 BGR ( [178, 220, 240] 은 주황불빛 )
 	preferenceImages 가 4장만 되어도 충분함.
 	'''
-	# Input File : C:\\Users\\KDW\\Desktop\\KOO\\upload\\2020-11-21T06.625Zinterior (70).jpg
-	inputBaseFile = inputFile.split("Z")[-1]
-	preferenceBaseFile = [preferenceImages[i].split("Z")[-1] for i in range(len(preferenceImages))]
+	inputBaseFile, preferenceBaseFile = utility.file_basify(inputFile, preferenceImages)
 
+	now = time.time()
 	detection_model = pspnet_50_ADE_20K()
 	outputFile = utility.get_add_dir(inputFile, "temp")
 
 	# Object Detect & Segmentation
-	[coord, str_tag, number_tag, score, rect_files, additional_infor, n_color]  = getODandSegment(inputFile, od_model)
+	[coord, str_tag, number_tag, score, rect_files, additional_infor, n_color]  = getODandSegment(inputBaseFile, od_model)
 
 	(imgHeight, imgWidth, _) = utility.read_image(inputFile).shape
 	if imgWidth > destSize[0] and imgHeight > destSize[1]:
@@ -418,6 +430,9 @@ def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,2
 		ratio = (1, 1)
 	print("Loading Finished")
 	
+	temp = time.time()
+	print("Loading Time : ", temp - now)
+
 	# Wall Detection with input image.
 	wall_divided = segmentation.detect_wall_floor(inputFile, detection_model)
 	wall_divided = utility.resize_2darr(wall_divided, ratio=ratio)
@@ -432,12 +447,12 @@ def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,2
 	baseNameFiles = [os.path.basename(files[f]) for f in range(len(files))]
 
 	print("Wall Color start.")
-	indx = list(range(0, len(preferenceImages)))
+	indx = list(range(0, len(preferenceBaseFile)))
 	random.shuffle(indx)
 	# Select 2 color of above to preferWallColor and preferFloorColor
 	for i in range(MAX_WALL_IMAGE):
 		ind = indx[i]
-		preferImage = preferenceImages[ind]
+		preferImage = preferenceBaseFile[ind]
 		loadIndex = baseNameFiles.index(os.path.basename(preferImage))	# We do only compare with base name.
 		preferWallColor.append(wallColors[loadIndex])
 		preferFloorColor.append(floorColors[loadIndex])
@@ -451,13 +466,15 @@ def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,2
 		wfColorChangeImage.append(wfOutputFile)
 	print("Wall Color Changed")
 	
+	temp = time.time()
+	print("Wall Coloring Time : ", temp - now)
+	
 	# Change Object ( Table and Chair )
-
 	partChangedFiles = []
 	procs = []
+
 	for i in range(MAX_WALL_IMAGE):
 		for j in range(MAX_PART_CHANGE_IMAGE):
-			print("now ", MAX_PART_CHANGE_IMAGE * i + j)
 			# 넘겨줄 인자를 저장하고, Thread를 실행시켜서 속도 향상.
 			argvFile = utility.add_name(config.SUBPROCESS_ARGV, "_" + str(MAX_PART_CHANGE_IMAGE * i + j))
 			utility.save_result([selectedPreferenceImages, wfColorChangeImage, outputFile, str_tag, coord, rect_files, i, j, ratio], argvFile)
@@ -467,15 +484,21 @@ def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,2
 			procs.append(proc)
 
 	for i in range(len(procs)):
-		print("Now ", i, " is running.")
 		out = procs[i].communicate()[0]
-		partChangedFiles.append(str(out).split("\n")[-1])
+		out = str(out).split("\n")
+		tout = []
+		for i in range(len(out)):
+			if len(out[i]) > 0:
+				tout.append(out[i])
+		partChangedFiles.append(tout[-1])
 
 	print("Part Changed Finished")
 	# Add some plant.
 	# partChangedFiles = print() # Image number will not be changed.
 
-	partChangedFiles = utility.get_filenames("Image/example/temp")
+	temp = time.time()
+	print("Part Changing Time : ", temp - now)
+
 	# Change Light
 	for i in range(MAX_OUT_IMAGE):
 		print("Now Proceed : ", i)
@@ -485,7 +508,10 @@ def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,2
 		else:
 			changed_file = styler.get_light_change(partChangedFiles[i], baseLight, baseLight)
 		utility.save_image(changed_file, files)
+		partChangedFiles[i] = files
 	# partChangedFiles 가 결국 바뀐 파일들
+	temp = time.time()
+	print("Total Time : ", temp - now)
 
 def get_color_system(directory):
 	'''
@@ -533,8 +559,7 @@ def image_color_match(inputImage):
 					admitableFiles.append(files[index])
 				index += 1
 		admitable += 10
-	print(len(colors))
-	print(len(admitableColors))
+		
 	utility.print_image(utility.color_to_image(input_colors))
 	
 	return admitableColors, admitableFiles
