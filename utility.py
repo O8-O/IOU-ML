@@ -6,8 +6,7 @@ import os
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import shutil
-
-from tensorflow.python.eager.context import internal_operation_seed
+import config
 
 dir_x = [0, 0, 1, -1]
 dir_y = [1, -1, 0, 0]
@@ -145,6 +144,77 @@ def get_remarkable_color_n(color_list, n, convert_rgb=False):
 	if convert_rgb:
 		result_color = [cv2.cvtColor(np.array([[result_color[i]]], dtype="uint8"), cv2.COLOR_BGR2RGB).tolist()[0][0] for i in range(len(result_color))]
 	return result_color
+
+# 좌표 변환
+def change_coord(coord, ratio=(0.5, 0.5)):
+	# coord 좌표를 ratio 비율만큼 변화시킨다.
+	return (int(coord[0] * ratio[0]), int(coord[1] * ratio[1]))
+
+def change_coords(coords, ratio=(0.5, 0.5)):
+	return [(int(coords[i][0] * ratio[0]), int(coords[i][1] * ratio[1])) for i in range(len(coords))]
+
+def changed_coords2d(coords, ratio=(0.5, 0.5)):
+	return [change_coords(coords[i], ratio=ratio) for i in range(len(coords))]
+
+def change_arrcoords(coords, ratio=(0.5, 0.5)):
+	resized_coords = []
+	for i in range(len(coords)):
+		resized_coords.append([])
+		for j in range(len(coords[i])):
+			# Order of x x y y
+			if j < 2:
+				resized_coords[i].append(coords[i][j] * ratio[0])
+			else:
+				resized_coords[i].append(coords[i][j] * ratio[1])
+				
+	return resized_coords
+
+def get_relative_ratio(width, height, dstWidth, dstHeight):
+	return (dstWidth / width, dstHeight / height)
+
+def change_class_total_with_ratio(class_total, ratio=(0.5, 0.5)):
+	ret_class_total = []
+	for ct in class_total:
+		change_ct = change_coord(ct, ratio)
+		if change_ct not in ret_class_total:
+			ret_class_total.append(change_ct)
+	return ret_class_total
+
+def resize_image(image, ratio=(0.5, 0.5)):
+	(height, width, _) = image.shape
+	retWidth = int(width * ratio[0])
+	retHeight = int(height * ratio[1])
+	retImage = np.zeros((retHeight, retWidth, 3), dtype=np.uint8)
+
+	for h in range(retHeight):
+		for w in range(retWidth):
+			retImage[h][w] = get_exist_value(image, h, w, ratio)
+
+	return retImage
+
+def resize_2darr(image, ratio=(0.5, 0.5)):
+	(height, width) = image.shape
+	retWidth = int(width * ratio[0])
+	retHeight = int(height * ratio[1])
+	retImage = np.zeros((retHeight, retWidth), dtype=np.uint8)
+
+	for h in range(retHeight):
+		for w in range(retWidth):
+			retImage[h][w] = get_exist_value(image, h, w, ratio)
+
+	return retImage
+
+def get_exist_value(src, h, w, ratio, func="leftTop"):
+	exist_h = int(h * ( 1 / ratio[1]))
+	exist_w = int(w * ( 1 / ratio[0]))
+
+	if func=="average":
+		exist_hn = int((h + 1) * ( 1 / ratio[1]))
+		exist_wn = int((w + 1) * ( 1 / ratio[1]))
+		exist_h = int((exist_h + exist_hn)/ 2)
+		exist_w = int((exist_w + exist_wn)/ 2)
+
+	return src[exist_h][exist_w]
 
 # Print 함수들
 def print_list_sparse(li, height, width, density=7):
@@ -337,7 +407,7 @@ def tag_classifier(input_class):
 	# Get only our interested feature.
 	class_number = [15, 33, 44, 46, 47, 48, 49, 50, 51, 58, 62, 63, 64, 65, 67, 70, 72, 73, 74, 75, 76, 78, 79, 80, 81, 82, 84, 85, 86, 89]
 	class_tag = ["bench", "suitcase", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "table", "chair", "couch", "potted plant", \
-		"bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "microwave", "oven", "toaster", "sink", "refrigerator", "book", \
+		"bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "microwave", "oven", "toaster", "sink", "refrigeratioor", "book", \
 		"clock", "vase", "hair drier"]
 	if input_class in class_number:
 		return class_tag[class_number.index(input_class)]
@@ -369,6 +439,7 @@ def get_class_with_given_coord(class_total, given_coord):
 		for cn in range(len(class_total)):
 			if coord in class_total[cn] and coord not in ret_class_total:
 				ret_class_total += class_total[cn]
+				break
 	
 	return ret_class_total
 
@@ -520,3 +591,90 @@ def get_only_jpg_files(get_dir):
 		if ".jpg" in f:
 			ret_dir.append(f)
 	return ret_dir
+
+def get_userinput_bin(inputFile):
+	return config.RESEARCH_BASE_DIR + '/' + add_name(os.path.basename(inputFile), "_userInput", extension="bin")
+
+def get_bin(inputFile):
+	return config.RESEARCH_BASE_DIR + '/' + inputFile.split("/")[-1].split(".")[0] + ".bin"
+
+def get_od_bin(inputFile):
+	return config.RESEARCH_BASE_DIR + '/' + inputFile.split("/")[-1].split(".")[0] + "_od.bin"
+
+def get_rc_bin(inputFile):
+	return config.RESEARCH_BASE_DIR + '/' + inputFile.split("/")[-1].split(".")[0] + "_rc.bin"
+
+def file_basify(inputFile, preferenceImages):
+	# Input File : C:\\Users\\KDW\\Desktop\\KOO\\upload\\2020-11-21T06.625Zinterior (70).jpg
+	# Test 당시 InputFile Image/example/interior7.jpg, preferenceImage "interior (84).jpg", "interior (40).jpg", "interior (82).jpg"
+	if "Zinterior" in inputFile:
+		inputBaseFile = inputFile.split("Z")[-1]
+		preferenceBaseFile = [preferenceImages[i].split("Z")[-1] for i in range(len(preferenceImages))]
+	else:
+		inputBaseFile = inputFile
+		preferenceBaseFile = preferenceImages
+	return inputBaseFile, preferenceBaseFile
+
+def logging(str_data):
+	with open("logging.txt", 'a') as f:
+		f.write(str_data + "\n")
+
+def lightStringer(lightList):
+	#ligthList need to be BGR sequence.
+	lightString = "#"
+
+	for i in range(2, -1, -1):
+		lightString += str(format(lightList[i], 'x')) 	#BGR Sequence, reverse order.
+
+	return lightString
+
+def save_log_dictionary(inputFile, partChangedImage, changed_log):
+	# changeLog 는 [wallColor, floorColor, wfColorImage, utility.lightStringer(baseLight[i]), 
+	# changedFurnitureInfor, recommandFurnitureInfor] 형태의 list
+	# changedFurnitureInfor 는 [cfLocInfor, cfColorInfor]
+	
+	return {
+		"inputFile" : inputFile,
+		"changedFile" : partChangedImage,
+		"changedLog" : [make_changed_json(changed_log[i]) for i in range(len(changed_log))]
+	}
+	
+def make_changed_json(changed_log):
+	# changed_log[i] 가 입력.
+	return {
+		"wallColor" : changed_log[0],
+		"wallPicture" : changed_log[2],
+		"floorColor" : changed_log[1],
+		"floorPicture" : changed_log[2],
+		"lightColor" : changed_log[3],
+		"changedFurniture" : [ {"location": changed_log[4][0][i], "color": changed_log[4][1][i]} for i in range(len(changed_log[4])) ],
+		"recommandFurniture" : [ {"location": changed_log[4][0][i], "color": changed_log[5][i]} for i in range(len(changed_log[4]))]
+
+	}
+
+'''
+changedList[0].changedFile = "원본 파일";
+	changedList[1].changedFile = "C:/바뀐/파일/이름1.jpg";
+	changedList[1].changedJson = "바뀐 json 정보";
+	changedList[1].changedJson = {
+		wallColor : [233, 242, 172],
+		wallPicture : "C:/무엇을/통해/색이/나왔는가.jpg",
+		floorColor : [233, 242, 172],
+		floorPicture : "C:/무엇을/통해/색이/나왔는가.jpg",
+		lightColor : [255, 255, 255],
+		changedFurniture : [
+			{start : [234, 457], color : [233, 242, 172]},
+			{start : [1023, 678], color : [233, 242, 172]},
+		],
+		recommandFurniture : [
+			{start : [234, 457], pictureList : ["C:/recommand/file/path/filename1.jpg", "C:/recommand/file/path/filename2.jpg", "C:/recommand/file/path/filename3.jpg"]},
+			{start : [234, 457], pictureList : ["C:/recommand/file/path/filename1.jpg", "C:/recommand/file/path/filename2.jpg", "C:/recommand/file/path/filename3.jpg"]},
+		],
+		recommandMore : [
+			"C:/recommand/file/path/filename1.jpg", "C:/recommand/file/path/filename2.jpg", "C:/recommand/file/path/filename3.jpg"
+		]
+	};
+	// 2 ~ 8 까지 반복
+	// Job end.	changedList is full-path file list which is modified.
+}
+'''

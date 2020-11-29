@@ -1,7 +1,8 @@
-from tensorflow.python import util
+from six import print_
 import styler
 import segmentation
 import image_processing
+import matrix_processing
 import utility
 import objectDetector
 import random
@@ -9,26 +10,32 @@ import cv2
 import time
 import numpy as np
 import config
+import subprocess
+import os
 
-from utility import coord_to_image, get_color_distance_map
+from keras_segmentation.pretrained import pspnet_50_ADE_20K 
 
 MAX_OUT_IMAGE = 8
 MAX_CHANGE_COLOR = 3
-FILE_INQUEUE = "fileQueue.txt"
-FILE_OUTQUEUE = "fileOutQueue.txt"
+MAX_WALL_IMAGE = 2
+MAX_PART_CHANGE_IMAGE = 4
 COLOR_SYSTEM_FILE = "colorSystem.bin"
 RESEARCH_BASE_DIR = config.RESEARCH_BASE_DIR
+FILE_INQUEUE = RESEARCH_BASE_DIR + "fileQueue.txt"
+FILE_OUTQUEUE = RESEARCH_BASE_DIR + "fileOutQueue.txt"
 functionList = ["getStyleChangedImage"]
 detection_model = None
+# destSize = (640, 925) # width, height
+destSize = (320, 460) # width, height
 
 def segment(inputFile, outputFile, outputDataFile, total=False) :
 	'''
 	입력받은 파일을 Segmentation 해서 output한다.
 	Output 한 결과는 조각난 사진 모음.
 	'''
-	divided_class, class_number, class_total, class_border, _, _, class_color, _, width, height = \
+	divided_class, class_number, class_total, class_border, _, _, class_color, largest_mask, width, height = \
 	segmentation.get_divided_class(inputFile, total=total)
-	utility.save_result([divided_class, class_number, class_total, class_border], outputDataFile)
+	utility.save_result([divided_class, class_number, class_total, class_border, largest_mask], outputDataFile)
 	
 	dc_image = utility.divided_class_into_image(divided_class, class_number, class_color, width, height, class_number)
 	if not outputFile == None:
@@ -115,52 +122,60 @@ def textureTransferArea(inputFile, inputDataFile, outputFileName, destTexture, s
 	destArea = styler.get_similar_color_area(divided_class, class_number, class_total, class_color, srcColor, 240) # Simmilar Color threshold to 200.
 	styler.change_area_style(inputFile, outputFileName, destTexture, destArea)
 
-def styleTransfer(inputFile, inputDataFile, destFile) :
+def styleTransfer(inputFile, inputDataFile, destFile, ratio=(1.0, 1.0)) :
 	'''
 	입력받은 inputFile의 색과 질감을 destFile의 색과 질감으로 임의로 변형해준다. 
 	'''
 	if utility.is_exist(inputDataFile):
-		[divided_class, class_number, class_total, class_border] = \
-		utility.load_result(inputDataFile)
+		loadData = utility.load_result(inputDataFile)
+		if len(loadData) == 5:
+			# Newer Version of segmentation.
+			[divided_class, class_number, class_total, _, largest_mask] = loadData
+		else:
+			[divided_class, class_number, class_total, _] = loadData
+			largest_mask = None
 		class_count = []
 		for ct in class_total:
 			class_count.append(len(ct))
 	else:
-		divided_class, class_number, class_total, class_border, class_count, _, class_color, _, _, _ = \
+		divided_class, class_number, class_total, _, class_count, _, class_color, _, _, _ = \
 		segmentation.get_divided_class(inputFile)
-	
-	# Init Variables.
-	largest_mask, _, _, (width, height) = segmentation.get_segmented_image(inputFile)
-	class_color = image_processing.get_class_color(utility.read_image(inputFile), class_total, class_count)
+		
+	# Init Variables. - TODO : Change this part with largest mask.
+	# largest_mask, _, _, (width, height) = segmentation.get_segmented_image(inputFile)
+	# class_color = image_processing.get_class_color(utility.read_image(inputFile), class_total, class_count)
+	img = utility.read_image(inputFile)
+	(height, width, _) = img.shape
 
 	file_extension = "." + inputFile.split(".")[1]
 	file_base_name = inputFile.split(".")[0]
+	
+	resized_class_total = utility.changed_coords2d(class_total, ratio=ratio)
+	# 중복 제거
+	temp_class_total = resized_class_total
+	resized_class_total = []
+	for tc in temp_class_total:
+		if tc not in resized_class_total:
+			resized_class_total.append(tc)
+			
+	input_sample = [resized_class_total[i][0] for i in range(len(resized_class_total))]
+	if len(input_sample) < MAX_CHANGE_COLOR:
+		input_sample *= int(MAX_CHANGE_COLOR // len(input_sample)) + 1 
+	dest_color = image_processing.get_dominant_color(destFile, clusters=8)
 
-	segdata = utility.add_name(inputFile, "_segmented")
-	utility.save_image(largest_mask, segdata)
-
-	# Get Cutted File`s color.
-	input_color = getDominantColor(segdata)
-	if len(input_color) < MAX_CHANGE_COLOR:
-		input_color *= int(MAX_CHANGE_COLOR // len(input_color)) + 1 
-
-	dest_color = getDominantColor(destFile)
-	if len(dest_color) < MAX_CHANGE_COLOR:
-		dest_color *= int(MAX_CHANGE_COLOR // len(dest_color)) + 1 
-	temp = []
-	for i in range(len(dest_color)):
-		temp.append(utility.cut_saturation(dest_color[i]))
-	dest_color = temp
-
+	part_change_image = []
+	now_dest_color = []
 	for i in range(MAX_OUT_IMAGE):
 		next_file_name = file_base_name + "_" + str(i) + file_extension
-		now_input_color = random.sample(input_color, MAX_CHANGE_COLOR)
+		now_input_sample = random.sample(input_sample, MAX_CHANGE_COLOR)
 		now_dest_color = random.sample(dest_color, MAX_CHANGE_COLOR)
-		destArea = []
+		part_change_image = utility.read_image(inputFile)
+		part_change_image = utility.resize_image(part_change_image, ratio=ratio)
 		for j in range(MAX_CHANGE_COLOR):
-			destArea.append(styler.get_similar_color_area(divided_class, class_number, class_total, class_color, now_input_color[j], 200))
-		part_change_image = styler.change_area_color_multi(inputFile, next_file_name, now_dest_color, divided_class, destArea, change_style="grayscale")
-		utility.print_image(part_change_image)
+			change_image = styler.change_dest_color(inputFile, next_file_name, now_dest_color[j], divided_class, resized_class_total,\
+				[now_input_sample[j]], save_flag=False, ratio=ratio)
+			part_change_image = image_processing.add_up_image(part_change_image, change_image, resized_class_total[input_sample.index(now_input_sample[j])], width, height)
+	return part_change_image, now_dest_color
 
 def getFurnitureShape(inputFile, inputDataFile, outputFile):
 	'''
@@ -270,12 +285,12 @@ def change_str_to_coord(coord_str):
 	'''
 	coord_str need to be form with (a,b)
 	'''
-	if "," not in coord_str and ( "(" == coord_str[0] and ")" == coord_to_image[-1]):
+	if "," not in coord_str and ( "(" == coord_str[0] and ")" == utility.coord_to_image[-1]):
 		raise Exception("OptionError : COORD_FORMAT_IS_NOT_FORMATTABLE");
-	[a, b] = coord_to_image[1:-1].split(",")
+	[a, b] = utility.coord_to_image[1:-1].split(",")
 	return (a, b)
 
-def getStyleChangedImage(inputFile, preferenceImages, tempdata="temp"):
+def getStyleChangedImage_past(inputFile, preferenceImages, tempdata="temp"):
 	'''
 	inputFile에 대한 preferenceImages 를 출력. 
 	print 함수로 각 변환한 사진의 이름을 출력하고, 마지막에 몇 장을 줄것인지 출력한다.
@@ -349,6 +364,189 @@ def getStyleChangedImage(inputFile, preferenceImages, tempdata="temp"):
 	returnImageList.append(MAX_OUT_IMAGE)
 	return returnImageList
 
+def getODandSegment(inputFile, od_model):
+	# [coord, str_tag, number_tag, score, rect_files, additional_infor, n_color] = imageClassifier.saveParameter(inputFile, od_model) # Get OD Data
+	[coord, str_tag, number_tag, score, rect_files, additional_infor, n_color] = \
+	utility.load_result(config.RESEARCH_BASE_DIR + "/" + os.path.basename(utility.get_od_bin(inputFile)))
+	for i in range(len(str_tag)):
+		if str_tag[i] == "sofa" or str_tag[i] == "chair":
+			if utility.is_exist(utility.get_userinput_bin(rect_files[i])):
+				rect_data_file = utility.get_userinput_bin(rect_files[i])
+			elif utility.is_exist(utility.get_bin(rect_files[i])):
+				rect_data_file = utility.get_bin(rect_files[i])
+			else:
+				rect_data_file = utility.get_bin(rect_files[i])
+				segment(rect_files[i], utility.add_name(rect_files[i], "_divided"), rect_data_file)
+	return [coord, str_tag, number_tag, score, rect_files, additional_infor, n_color] 
+
+def changeWallFloor(inputFile, outputFile, wall_divided, wall_total, wall_number, i, preferWallColor, preferFloorColor, ratio=(0.5, 0.5)):
+	wfOutputFile = utility.add_name(outputFile, "_wfColor" + str(i))
+	styler.change_dest_color(inputFile, wfOutputFile, preferWallColor[i], \
+		wall_divided, wall_total, [wall_total[wall_number.index(segmentation.WALL_CLASS)][0]],\
+		touch_hint=wall_number.index(segmentation.WALL_CLASS), ratio=ratio)
+	styler.change_dest_color(wfOutputFile, wfOutputFile, preferFloorColor[i], \
+		wall_divided, wall_total, [wall_total[wall_number.index(segmentation.FLOOR_CLASS)][0]],\
+		touch_hint=wall_number.index(segmentation.FLOOR_CLASS))
+	return wfOutputFile
+
+def getRecommandFurnitureForImage(selectedPreferenceImage, str_tag):
+	[basePreferenceFiles, recommandFile] = utility.load_result(config.RECOMMAND_BASE_FILE)
+	temp = recommandFile[basePreferenceFiles.index(os.path.basename(selectedPreferenceImage))]
+	retRecomandFile = []
+	recType = "sofa" if str_tag == "sofa" or str_tag == "chair" else "table"
+	for t in temp:
+		if t not in retRecomandFile and recType in t:
+			retRecomandFile.append(t)
+	return retRecomandFile
+
+def getPartChangedImage(inputFile, outputFile, str_tag, coord, rect_files, selectedPreferenceImage, i, j, ratio=(0.5, 0.5)):
+	partChangedOutFile = utility.add_name(outputFile, "_changed_" + str(i) + str(j))
+	original_image = utility.read_image(inputFile)
+	resized_coord = utility.change_arrcoords(coord, ratio=ratio)
+	recommand_furniture = []
+	changed_log = []
+
+	for k in range(len(str_tag)):
+		if ( str_tag[k] == "sofa" or str_tag[k] == "chair" ):
+			furniture_file = rect_files[k]
+			# 만약 userinput 이 있다면, 그것을 대신 사용.
+			if utility.is_exist(utility.get_userinput_bin(furniture_file)):
+				furniture_data_file = utility.get_userinput_bin(furniture_file)
+			else:
+				furniture_data_file = utility.get_bin(furniture_file)
+			styled_furniture, change_color = styleTransfer(furniture_file, furniture_data_file, selectedPreferenceImage, ratio=ratio)
+			original_image = image_processing.add_up_image_to(original_image, styled_furniture, \
+				int(resized_coord[k][0]), int(resized_coord[k][1]), int(resized_coord[k][2]), int(resized_coord[k][3]))
+			rec_furn = getRecommandFurnitureForImage(selectedPreferenceImage, str_tag[k])
+			recommand_furniture.append(random.sample(rec_furn, 3))
+			changed_log.append([resized_coord[k], change_color])
+
+	out_res_file = utility.add_name(partChangedOutFile, "_result", extension=".bin")
+	utility.save_result([changed_log, recommand_furniture], out_res_file)
+	utility.save_image(original_image, partChangedOutFile)
+	return partChangedOutFile, out_res_file
+
+def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,255,255], changeLight=[178, 220, 240]):
+	'''
+	입력 Color는 BGR ( [178, 220, 240] 은 주황불빛 )
+	preferenceImages 가 4장만 되어도 충분함.
+	'''
+	inputBaseFile, preferenceBaseFile = utility.file_basify(inputFile, preferenceImages)
+	
+	now = time.time()
+	detection_model = pspnet_50_ADE_20K()
+	outputFile = utility.get_add_dir(inputFile, "temp")
+
+	# Object Detect & Segmentation
+	[coord, str_tag, number_tag, score, rect_files, additional_infor, n_color]  = getODandSegment(inputBaseFile, od_model)
+
+	(imgHeight, imgWidth, _) = utility.read_image(inputFile).shape
+	if imgWidth > destSize[0] and imgHeight > destSize[1]:
+		ratio = (destSize[0] / imgWidth, destSize[1] / imgHeight)
+	else:
+		ratio = (1, 1)
+	print("Loading Finished")
+	
+	temp = time.time()
+	print("Loading Time : ", temp - now)
+
+	# Wall Detection with input image.
+	wall_divided = segmentation.detect_wall_floor(inputFile, detection_model)
+	wall_divided = utility.resize_2darr(wall_divided, ratio=ratio)
+	wall_total, wall_number = matrix_processing.divided_class_into_class_total(wall_divided)
+	print("Wall Divided.")
+
+	# Get preference image`s data.
+	preferWallColor = []
+	preferFloorColor = []
+	selectedPreferenceImages = []
+	[files, domColors, wallColors, floorColors] = utility.load_result(config.RESEARCH_BASE_FILE)	# Each files` dom color, wall color, floor color will be saved.
+	baseNameFiles = [os.path.basename(files[f]) for f in range(len(files))]
+
+	print("Wall Color start.")
+	indx = list(range(0, len(preferenceBaseFile)))
+	random.shuffle(indx)
+	# Select 2 color of above to preferWallColor and preferFloorColor
+	for i in range(MAX_WALL_IMAGE):
+		ind = indx[i]
+		preferImage = preferenceBaseFile[ind]
+		loadIndex = baseNameFiles.index(os.path.basename(preferImage))	# We do only compare with base name.
+		preferWallColor.append(wallColors[loadIndex])
+		preferFloorColor.append(floorColors[loadIndex])
+		selectedPreferenceImages.append(files[loadIndex])
+	print("Wall Colored Selected.")
+
+	# Change wall & floor
+	wfColorChangeImage = []
+	for i in range(MAX_WALL_IMAGE):
+		wfOutputFile = changeWallFloor(inputFile, outputFile, wall_divided, wall_total, wall_number, i, preferWallColor, preferFloorColor, ratio=ratio)
+		wfColorChangeImage.append(wfOutputFile)
+	print("Wall Color Changed")
+	
+	temp = time.time()
+	print("Wall Coloring Time : ", temp - now)
+	
+	# Change Object ( Table and Chair )
+	partChangedFiles = []
+	procs = []
+	recommandFurnitureList = []
+	changeFurnitureLocation = []
+	changeFurnitureColor = []
+
+	for i in range(MAX_WALL_IMAGE):
+		for j in range(MAX_PART_CHANGE_IMAGE):
+			# 넘겨줄 인자를 저장하고, Thread를 실행시켜서 속도 향상.
+			argvFile = utility.add_name(config.SUBPROCESS_ARGV, "_" + str(MAX_PART_CHANGE_IMAGE * i + j))
+			utility.save_result([selectedPreferenceImages, wfColorChangeImage, outputFile, str_tag, coord, rect_files, i, j, ratio], argvFile)
+
+			# Subprocess need to calculate with given ratio.
+			proc = subprocess.Popen(['python', 'getPartChangedImage.py', argvFile], shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, encoding="cp949")
+			procs.append(proc)
+
+	for i in range(len(procs)):
+		out = procs[i].communicate()[0]
+		out = str(out).split("\n")
+		tout = []
+		for i in range(len(out)):
+			if len(out[i]) > 0:
+				tout.append(out[i])
+		[changed_log, recommand_furniture] = utility.load_result(tout[-1])
+		partChangedFiles.append(tout[-2])
+		recommandFurnitureList.append(recommand_furniture)
+		for i in range(len(changed_log)):
+			changeFurnitureLocation.append(changed_log[i][0])
+			changeFurnitureColor.append(changed_log[i][1])
+			
+	print("Part Changed Finished")
+	# Add some plant.
+	# partChangedFiles = print() # Image number will not be changed.
+
+	temp = time.time()
+	print("Part Changing Time : ", temp - now)
+
+	lightList = []
+	# Change Light
+	for i in range(MAX_OUT_IMAGE):
+		print("Now Proceed : ", i)
+		files = utility.add_name(partChangedFiles[i], "_lighter")
+		if random.randint(1, MAX_OUT_IMAGE) > 4:
+			changed_file = styler.get_light_change(partChangedFiles[i], baseLight, changeLight)
+			lightList.append(changeLight)
+		else:
+			changed_file = styler.get_light_change(partChangedFiles[i], baseLight, baseLight)
+			lightList.append(baseLight)
+		utility.save_image(changed_file, files)
+		partChangedFiles[i] = files
+	# partChangedFiles 가 결국 바뀐 파일들
+	temp = time.time()
+	print("Total Time : ", temp - now)
+	changeLog = makeChangeInfor(preferWallColor, preferFloorColor, [preferenceImages[indx[0]], preferenceImages[indx[1]]], partChangedFiles, lightList, changeFurnitureLocation, changeFurnitureColor, \
+		recommandFurnitureList, [])
+	
+	resultDictionary = utility.save_log_dictionary(inputFile, partChangedFiles, changeLog)
+	with open(FILE_OUTQUEUE, 'a') as f:
+		f.write(str(resultDictionary) + "\n")
+
 def get_color_system(directory):
 	'''
 	directory 내부에 있는 모든 Color system의 목록을 조사한다. Remarkable Color로 조사한다.
@@ -395,13 +593,12 @@ def image_color_match(inputImage):
 					admitableFiles.append(files[index])
 				index += 1
 		admitable += 10
-	print(len(colors))
-	print(len(admitableColors))
+		
 	utility.print_image(utility.color_to_image(input_colors))
 	
 	return admitableColors, admitableFiles
 
-def checkInput():
+def checkInput(detection_model):
 	with open(FILE_INQUEUE, 'r') as f:
 		lines = f.readline()
 	
@@ -415,7 +612,7 @@ def checkInput():
 	while i < len(lines):
 		while lines[i] not in functionList and i < len(lines):
 			i += 1
-		output = doJob(lines[functionIndex:i])
+		output = doJob(lines[functionIndex:i], detection_model)
 		# Write Output Data.
 		if output != None:
 			with open(FILE_OUTQUEUE, 'a') as f:
@@ -424,99 +621,78 @@ def checkInput():
 					f.write(str(out) + "\n")
 		
 		functionIndex = i
-		
-def doJob(argv):			
+	
+def doJob(argv, detection_model):			
 	func = argv[0]
 	options = argv[1:]
-	if func == "segment":
-		option_check(options, 3)
-		segment(options[0], options[1], options[2])
-	elif func == "colorTransferToCoord":
-		option_check(options, 5)
-		bgr_color = change_hex_color_to_bgr(options[3])
-		coord = []
-		for str_coord in options[4:]:
-			coord.append(change_str_to_coord(str_coord))
-		colorTransferToCoord(options[0], options[1], options[2], bgr_color, coord)
-	elif func == "colorTransferToColor":
-		option_check(options, 5)
-		bgr_color_des = change_hex_color_to_bgr(options[3])
-		bgr_color_src = change_hex_color_to_bgr(options[4])
-		colorTransferToColor(options[0], options[1], options[2], bgr_color_des, bgr_color_src)
-	elif func == "colorTransferWithImage":
-		option_check(options, 4)
-		colorTransferWithImage(options[0], options[1], options[2], options[3])
-	elif func == "textureTransferToCoord":
-		option_check(options, 5)
-		coord = []
-		for str_coord in options[4:]:
-			coord.append(change_str_to_coord(str_coord))
-		textureTransferToCoord(options[0], options[1], options[2], options[3], coord)
-	elif func == "textureTransferArea":
-		option_check(options, 5)
-		bgr_color = change_hex_color_to_bgr(options[4])
-		textureTransferArea(options[0], options[1], options[2], options[3], bgr_color)
-	elif func == "getFurnitureShape":
-		option_check(options, 3)
-		getFurnitureShape(options[0], options[1], options[2])
-	elif func == "getDominantColor":
-		option_check(options, 1)
-		getDominantColor(options[0])
-	elif func == "styleTransfer":
-		option_check(options, 3)
-		styleTransfer(options[0], options[1], options[2])
-	elif func == "getStyleChangedImage":
+	if func == "getStyleChangedImage":
 		option_check(options, 2)
-		# Check Whether Preference.
-		label_data = utility.get_label_files()
-		label = [0, 0, 0, 0]
-		label_file = ["label0", "label1", "label2", "label3"]
+		lightRGB = options[1].spilt(" ")
+		light = [lightRGB[2], lightRGB[1], lightRGB[0]]	# RGB to BGR.
 
-		if len(options) == 2 and len(options[1]) == 0:
-			max_index = 0
-		else:
-			# 어느 라벨에 속하는지 검사.
-			for i in range(1, len(options)):
-				base_file = options[i].split("/")[-1]
-				for i in range(len(label_data)):
-					if base_file in label_data[i]:
-						label[i] += 1
-			
-			max_index = 0
-			for i in range(len(label)):
-				if label[i] > label[max_index]:
-					max_index = i
+		inputFile = options[0]
+		preferenceFiles = options[2:]
+
+		inputFile.replace("\\", "/")
+		preferenceFiles = [preferenceFiles[i].replace("\\", "/") for i in range(len(preferenceFiles))]
 
 		# 해당 라벨에 속하는 file로 image를 처리.
-		return getStyleChangedImage(options[0], utility.get_filenames("C:/workspace/IOU-Backend/util/IOU-ML/Image/InteriorImage/test/" + label_file[max_index]))
+		return getStyleChangedImage(inputFile, preferenceFiles, detection_model, baseLight=light)
+
+def makeChangeInfor(preferWallColor, preferFloorColor, wallFloorImages, partChangedFiles, baseLight, changedFurnitureLocation, changeColor, recommandFurniture, recommandMoreFurniture):
+	'''
+	changedFurnitureLocation : 8개 사진에 대해서 ([i < 8]) 사진 내 가구들의 ([j < _]) 위치 ([k < 4]), minX, maxX, minY, maxY 순서
+	changeCOlor : 8개 사진에 대해서([i < 8]) 사진 내에 가구들에 ([j < _]) 들어간 색 리스트 ([k < _])
+	recommandFurnitureInfor : 8개 사진에 대해서 ([i < 8]) 사진 내 가구들의 ([j < _]) 추천 리스트 ([k < _])
+	recommandMoreFurnitureInfor : 사진들에 대한 추천 리스트들.
+	'''
+	changeLog = []
+
+	utility.logging(str(partChangedFiles))
+	utility.logging(str(baseLight))
+	utility.logging(str(changedFurnitureLocation))
+	utility.logging(str(changeColor))
+	utility.logging(str(recommandFurniture))
+
+	for i in range(len(partChangedFiles)):
+		wallColor = preferWallColor[0] if i < 4 else preferWallColor[1]
+		floorColor = preferFloorColor[0] if i < 4 else preferFloorColor[1]
+		wfColorImage = wallFloorImages[0] if i < 4 else wallFloorImages[1]
+		cfLocInfor = changedFurnitureLocation[i]	# 사진 내 가구들의 위치 4개의 list.
+		cfColorInfor = []
+		for j in range(len(changeColor[i])):
+			cfColorInfor.append(utility.lightStringer(changeColor[i][j]))
+
+		changedFurnitureInfor = [cfLocInfor, cfColorInfor]
+		recommandFurnitureInfor = recommandFurniture[i]		# List of file name for each index`s furniture.
+		# recommandMoreFurnitureInfor = [random.sample(recommandMoreFurniture, random.randint(1, len(recommandMoreFurniture)))]	# List of file name for this picture.
+		changeLog.append([utility.lightStringer(wallColor), utility.lightStringer(floorColor), wfColorImage, utility.lightStringer(baseLight[i]), changedFurnitureInfor, recommandFurnitureInfor])
+
+	return changeLog
 
 if __name__ == "__main__":
+	#model_name = '1'
+	#od_model = objectDetector.load_model(model_name)
 	'''
-	test_image_directory = "C:/workspace/IOU-ML/Image/InteriorImage/test_only_image"
-	testFile = utility.get_filenames(test_image_directory)
-	# get_color_system(test_image_directory)
-	print(testFile[0])
-	admitableColor, admitableFiles = image_color_match(testFile[0])
-	for ad in admitableColor:
-		print(admitableFiles[admitableColor.index(ad)])
-		utility.print_image(utility.color_to_image(ad))
+	inputFiles = [
+		"Image/example/interior7.jpg",
+	]
+	for inputFile in inputFiles:
+		print(inputFile)
+		getStyleChangedImage(inputFile, ["interior (84).jpg", "interior (40).jpg", "interior (82).jpg"], "")
 	'''
-	
-	'''
-	files = utility.get_filenames("C:/workspace/IOU-ML/Image/InteriorImage/test_furniture/total")
-	index = 0
-	for fileName in files:
-		print("Now Process ", index, " / " , len(files))
-		outputFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "_divided")
-		outputDataFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "", extension="bin")
-		segment(fileName, outputFile, outputDataFile)
-		index += 1
-	'''
+	inputFile = "C:\\workspace\\IOU-ML\\Image\\example\\2020-11-21T06-31-30.625Zinterior7.jpg"
+	preferenceFiles = [
+		"C:\\workspace\\IOU-ML\\Image\\InteriorImage\\represent\\2020-11-21T06-31-30.625Zinterior (84).jpg",
+		"C:\\workspace\\IOU-ML\\Image\\InteriorImage\\represent\\2020-11-21T06-31-30.625Zinterior (40).jpg",
+		"C:\\workspace\\IOU-ML\\Image\\InteriorImage\\represent\\2020-11-21T06-31-30.625Zinterior (82).jpg"
+	]
 
-	fileName = "Image/example/interior1.jpg"
-	outputFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "_divided")
-	outputDataFile = RESEARCH_BASE_DIR + '/' + utility.add_name(fileName.split("/")[-1], "", extension="bin")
-	segment(fileName, outputFile, outputDataFile, total=True)
+	inputFile = inputFile.replace("\\", "/")
+	preferenceFiles = [preferenceFiles[i].replace("\\", "/") for i in range(len(preferenceFiles))]
+
+	getStyleChangedImage(inputFile, preferenceFiles, "")
+
 	'''
 	# Load ML Module and Read - Do ML Job
 	# Model name 1 mean dataset`s folder 1.
@@ -529,7 +705,7 @@ if __name__ == "__main__":
 		nowTime = time.time()
 		# 매 2초 혹은 7초마다 5초마다 검사한다.
 		if nowTime % 10 == 2 or nowTime % 10 == 7:
-			checkInput()
+			checkInput(detection_model)
 		else:
 			time.sleep(1)	# 1초간 휴식
 	'''

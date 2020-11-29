@@ -9,7 +9,10 @@ from detectron2.config import get_cfg
 from detectron2.data.detection_utils import read_image
 from keras_segmentation.pretrained import pspnet_50_ADE_20K 
 from modules.predictor import VisualizationDemo
-from utility import divided_class_into_color_map
+import numpy as np
+
+WALL_CLASS = 1
+FLOOR_CLASS = 2
 
 def setup_cfg(args):
 	# load config from file and command-line arguments
@@ -25,7 +28,7 @@ def setup_cfg(args):
 
 def merge_around(divided_class, class_number, class_total, class_border, class_count, merge_indx, width, height):
 	large_class_number = matrix_processing.get_around_largest_area(divided_class, width, height, class_border[merge_indx], class_number[merge_indx])
-	if large_class_number == 0:
+	if large_class_number == 0 or large_class_number == -1:
 		# Set into 0 Class
 		matrix_processing.set_area(divided_class, class_total[merge_indx], 0)
 		del class_number[merge_indx]
@@ -382,12 +385,6 @@ def detect_wall_floor(file_name, model):
 		if resized_out[-1][w] not in floor_class:
 			floor_class.append(resized_out[-1][w])
 
-	print(floor_class)
-	print(wall_class)
-	masked_image = utility.divided_class_into_color_map(resized_out, width, height)
-	utility.print_image(masked_image)
-
-	import numpy as np
 	wall_divied = np.zeros((height, width), dtype=np.uint8)
 	for h in range(height):
 		for w in range(width):
@@ -396,11 +393,8 @@ def detect_wall_floor(file_name, model):
 			elif h > 2 / 3 * height and mask[h][w] and resized_out[h][w] in floor_class:
 				wall_divied[h][w] = 2
 			
-	masked_image = utility.divided_class_into_color_map(wall_divied, width, height)
-	utility.print_image(masked_image)
-	
+	# Wall divided is 0 1 2 class which is 0 is nothing, 1 is wall, 2 is floor.
 	return wall_divied
-
 
 if __name__ == "__main__":
 	'''

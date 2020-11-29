@@ -10,20 +10,25 @@ from PyQt5.QtCore import Qt
 import config
 
 # File Name global variale
+#608, 580, 543, 333*
 RESEARCH_BASE_DIR = config.RESEARCH_BASE_DIR
-IMAGE_NAME = "Image/example/interior1.jpg"
-OUTPUT_FILE = RESEARCH_BASE_DIR + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "_divided")
+IMAGE_NAME = "C:/MLDATA/interior (333)/interior (333)_0.jpg" 
+OUTPUT_FILE = RESEARCH_BASE_DIR + "/interior (333)" + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "_divided")
 SEG_FILE_NAME = RESEARCH_BASE_DIR + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "", extension="bin")
 SEG_SAVE_NAME = RESEARCH_BASE_DIR + '/' + utility.add_name(IMAGE_NAME.split("/")[-1], "_userInput", extension="bin")
 # Constant
 CHANGE_DIVIED = "Image/example/temp.jpg"
 
-# Init Global Data for classify segmentation.
+# Init Global Data for classify segmentation
 totalClass = [[]]
 nowIndex = 0
 eraseMode = False
 eraseList = []
-[divided_class, class_number, class_total, class_border] = utility.load_result(SEG_FILE_NAME)
+load_value = utility.load_result(SEG_FILE_NAME)
+if len(load_value) == 5:
+    [divided_class, class_number, class_total, class_border, _] = load_value
+else:
+    [divided_class, class_number, class_total, class_border] = load_value
 
 class MyApp(QWidget):
     def __init__(self):
@@ -42,11 +47,18 @@ class MyApp(QWidget):
         # Add Button List ( 3개 버튼 - before / erase / next )
         grid.addWidget(self.buttonList(), 1, 0)
 
+        # Add Clear Button
+        clearBtn = QPushButton(self)
+        clearBtn.setText("Clear")
+        grid.addWidget(clearBtn, 2, 0)
+        clearBtn.clicked.connect(self.clearData)
+
         # Add Save Button
         saveButton = QPushButton(self)
         saveButton.setText("Save")
-        grid.addWidget(saveButton, 2, 0)
+        grid.addWidget(saveButton, 3, 0)
         saveButton.clicked.connect(self.saveData)
+        
         grid.setRowStretch(0, 20)
 
         self.setLayout(grid)
@@ -88,6 +100,12 @@ class MyApp(QWidget):
             totalClass[nowIndex].append(now)
         self.update()
     
+    def clearData(self):
+        global totalClass
+        global eraseList
+        totalClass = [[]]
+        eraseList = []
+
     def saveData(self):
         global nowIndex     # 현재 추가하고 있는 index
         global divided_class    # Class Number map
