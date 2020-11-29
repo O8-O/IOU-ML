@@ -1,6 +1,6 @@
 const fs = require('fs');
 
-ML_DATA = "C:/MLDAT/"
+ML_DATA = "C:/MLDATA/"
 FILE_INQUEUE = ML_DATA + "fileQueue.txt";
 FILE_OUTQUEUE = ML_DATA + "fileOutQueue.txt";
 
@@ -16,25 +16,33 @@ module.exports =  class MlWrapper {
 		for(var i = 0 ; i < preferenceImage.length; i++) {
 			reqString += preferenceImage + "\n"
 		}
-		fs.writeFile(fileName, reqString, () => {});
+		fs.writeFile(FILE_INQUEUE, reqString, () => {});
 	}
 
 	checkServiceEnd() {
 		return new Promise((res, rej) => {
 			fs.readFile(FILE_OUTQUEUE, (err, data) => {
 				if(err) rej(err);
+				var result = String(data).split("\n");
+				if(result.length == 0) { res([]); }
 				else {
-					var result = data.split("\n");
-					if(result.length == 0) { res([]); }
-					else {
-						var changedList = [];
-						for(var i = 1; i < result.length; i++) {
-							changedList.push(result[i]);
-						}
-						fs.writeFile(fileName, "", () => {});
-						res(changedList);
+					var resultData = result[0].replace(/\//g, "\\\\");
+					resultData = resultData.replace(/'/g, "\"");
+					console.log(resultData);
+					var changedData = JSON.parse(resultData);
+					var changedList = [];
+					changedList.push({changedFile: changedData.inputFile});
+
+					for(var i = 0; i < changedData.changedFile.length; i++) {
+						changedList.push({
+							changedFile: changedData.changedFile[i],
+							changedJson: changedData.changedLog[i]
+						})
 					}
-					
+
+					console.log(changedList);
+					// fs.writeFile(fileName, "", () => {});
+					res(changedList);
 				}
 			});
 		});
@@ -59,6 +67,15 @@ mlCaller.checkServiceEnd()
 		// Job not end
 	}
 	else {
+		console.log("hmm?");
+	}
+})
+.catch((err) => {
+	console.log(err);
+});
+
+/**
+ * 
 		changedList[0].changedFile = "원본 파일";
 		changedList[1].changedFile = "C:/바뀐/파일/이름1.jpg";
 		changedList[1].changedJson = "바뀐 json 정보";
@@ -82,8 +99,4 @@ mlCaller.checkServiceEnd()
 		};
 		// 2 ~ 8 까지 반복
 		// Job end.	changedList is full-path file list which is modified.
-	}
-})
-.catch((err) => {
-	console.log(err);
-});
+ */

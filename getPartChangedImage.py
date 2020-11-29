@@ -7,6 +7,7 @@ import random
 if __name__ == "__main__":
     [selectedPreferenceImages, wfColorChangeImage, outputFile, str_tag, coord, rect_files, i, j, ratio] = utility.load_result(sys.argv[1])
     selectedPreferenceImage = selectedPreferenceImages[random.randint(0, len(selectedPreferenceImages) - 1)]
-    partChangedOutFile = mlWrapper.getPartChangedImage(wfColorChangeImage[i], outputFile, str_tag, coord, rect_files, selectedPreferenceImage, i, j, ratio=ratio)
+    partChangedOutFile, out_res_file = mlWrapper.getPartChangedImage(wfColorChangeImage[i], outputFile, str_tag, coord, rect_files, selectedPreferenceImage, i, j, ratio=ratio)
     print()
     print(partChangedOutFile)
+    print(out_res_file)

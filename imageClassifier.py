@@ -165,7 +165,50 @@ def addWallFloorParameter():
 		wallColors[indx] = wallFloorColorList[indx][1]
 		floorColors[indx] = wallFloorColorList[indx][2]
 	utility.save_result([files, domColors, wallColors, floorColors], config.RESEARCH_BASE_FILE)
-		
+
+def makeSofaUrl(sofa):
+	return config.RESEARCH_BASE_DIR + "/furniture/sofa/" + sofa
+
+def makeTableUrl(table):
+	return config.RESEARCH_BASE_DIR + "/furniture/table/" + table
+
+def addRecommandFiles():
+	inputFileList = ["interior (84).jpg", "interior (8).jpg", "interior (70).jpg", "interior (79).jpg",\
+		"interior (80).jpg", "interior (82).jpg", "interior (83).jpg", "interior (56).jpg", \
+		"interior (40).jpg", "interior (35).jpg", "interior (34).jpg", "interior (30).jpg", \
+		"interior (29).jpg", "interior (28).jpg", "interior (13).jpg",  "interior (1).jpg", ]
+	recomandList = [
+		[makeSofaUrl("s33.jpg"), makeSofaUrl("s25.jpg"), makeSofaUrl("s80.jpg"), makeSofaUrl("s21.jpg"), makeSofaUrl("s156.jpg"), makeTableUrl("34.jpg"), makeTableUrl("13.jpg")],
+		[ ],
+		[makeSofaUrl("s13.jpg"), makeSofaUrl("s17.jpg"), makeSofaUrl("s137.jpg"), makeSofaUrl("s136.jpg"), makeSofaUrl("s149.jpg"),\
+			makeTableUrl("59.jpg"), makeTableUrl("10.jpg"), makeTableUrl("43.jpg"), makeTableUrl("44.jpg")],
+		[makeSofaUrl("s22.jpg"), makeSofaUrl("s24.jpg"), makeSofaUrl("s33.jpg"), makeSofaUrl("s41.jpg"), makeSofaUrl("s42.jpg"),\
+			makeTableUrl("18.jpg"), makeTableUrl("42.jpg"), makeTableUrl("45.jpg")],
+		[makeSofaUrl("s73.jpg"), makeSofaUrl("s60.jpg"), makeSofaUrl("s58.jpg"), makeSofaUrl("s59.jpg"), makeSofaUrl("s132.jpg"), makeSofaUrl("s156.jpg"),\
+			makeTableUrl("82.jpg"), makeTableUrl("83.jpg"), makeTableUrl("3.jpg")],
+		[makeSofaUrl("s151.jpg"), makeSofaUrl("s152.jpg"), makeSofaUrl("s156.jpg"),\
+			makeTableUrl("8.jpg"), makeTableUrl("45.jpg"), makeTableUrl("58.jpg")],
+		[makeSofaUrl("s136.jpg"), makeSofaUrl("s137.jpg"), makeSofaUrl("s143.jpg"), makeSofaUrl("s144.jpg"), makeSofaUrl("s59.jpg"), makeSofaUrl("s69.jpg"),\
+			makeTableUrl("9.jpg"), makeTableUrl("5.jpg"), makeTableUrl("16.jpg")],
+		[makeSofaUrl("s41.jpg"), makeSofaUrl("s38.jpg"), makeSofaUrl("s150.jpg"), makeSofaUrl("s151.jpg"), makeSofaUrl("s13.jpg"),\
+			makeTableUrl("5.jpg"), makeTableUrl("15.jpg"), makeTableUrl("51.jpg")],
+		[makeTableUrl("52.jpg"), makeTableUrl("41.jpg"), makeTableUrl("64.jpg"), makeTableUrl("70.jpg"), makeTableUrl("66.jpg"), makeTableUrl("65.jpg")],
+		[makeSofaUrl("s13.jpg"), makeSofaUrl("55.jpg"), makeSofaUrl("s48.jpg"), makeSofaUrl("s49.jpg"), makeSofaUrl("s12.jpg"),\
+			makeTableUrl("59.jpg"), makeTableUrl("10.jpg"), makeTableUrl("43.jpg"), makeTableUrl("44.jpg")],
+		[makeSofaUrl("s65.jpg"), makeSofaUrl("s73.jpg"), makeSofaUrl("s74.jpg"), makeSofaUrl("s149.jpg"), makeSofaUrl("s142.jpg"), makeSofaUrl("s66.jpg"),\
+			makeTableUrl("89.jpg"), makeTableUrl("67.jpg"), makeTableUrl("55.jpg"), makeTableUrl("56.jpg")],
+		[makeTableUrl("50.jpg"), makeTableUrl("66.jpg"), makeTableUrl("71.jpg"), makeTableUrl("88.jpg")],
+		[makeSofaUrl("s133.jpg"), makeSofaUrl("s135.jpg"), makeSofaUrl("s139.jpg"), makeSofaUrl("s149.jpg"),\
+			makeTableUrl("43.jpg"), makeTableUrl("37.jpg"), makeTableUrl("59.jpg"), makeTableUrl("67.jpg")],
+		[makeSofaUrl("s22.jpg"), makeSofaUrl("s26.jpg"), makeSofaUrl("s29.jpg"), makeSofaUrl("s11.jpg"), makeSofaUrl("s18.jpg"), makeSofaUrl("s19.jpg"),\
+			makeTableUrl("4.jpg"), makeTableUrl("8.jpg"), makeTableUrl("5.jpg"), makeTableUrl("1.jpg")],
+		[makeSofaUrl("s25.jpg"), makeSofaUrl("s26.jpg"), makeSofaUrl("s35.jpg"), makeSofaUrl("s36.jpg"), makeSofaUrl("s41.jpg"), makeSofaUrl("s43.jpg"),\
+			makeTableUrl("23.jpg"), makeTableUrl("58.jpg"), makeTableUrl("88.jpg")],
+		[makeSofaUrl("s18.jpg"), makeSofaUrl("s19.jpg"), makeSofaUrl("s16.jpg"), makeSofaUrl("s151.jpg"), makeSofaUrl("s154.jpg"), makeSofaUrl("s150.jpg"),\
+			makeTableUrl("35.jpg"), makeTableUrl("2.jpg"), makeTableUrl("42.jpg")],
+	]
+	utility.save_result([inputFileList, recomandList], config.RECOMMAND_BASE_FILE)
+
 if __name__ == "__main__":
 	'''
 	fileDir = "Image/Interior"
@@ -176,6 +219,8 @@ if __name__ == "__main__":
 	'''
 
 	#saveParameters("C:/workspace/IOU-ML/Image/InteriorImage/represent")
-	addWallFloorParameter()
+	# addWallFloorParameter()
+	addRecommandFiles()
+	[basePreferenceFiles, recommandFile] = utility.load_result(config.RECOMMAND_BASE_FILE)
 	#parameter, files = readParameter(fileDir)
 	#classifyAndMove(parameter, files, labelDir)

@@ -10,7 +10,6 @@ import cv2
 import time
 import numpy as np
 import config
-import imageClassifier
 import subprocess
 import os
 
@@ -20,10 +19,10 @@ MAX_OUT_IMAGE = 8
 MAX_CHANGE_COLOR = 3
 MAX_WALL_IMAGE = 2
 MAX_PART_CHANGE_IMAGE = 4
-FILE_INQUEUE = "fileQueue.txt"
-FILE_OUTQUEUE = "fileOutQueue.txt"
 COLOR_SYSTEM_FILE = "colorSystem.bin"
 RESEARCH_BASE_DIR = config.RESEARCH_BASE_DIR
+FILE_INQUEUE = RESEARCH_BASE_DIR + "fileQueue.txt"
+FILE_OUTQUEUE = RESEARCH_BASE_DIR + "fileOutQueue.txt"
 functionList = ["getStyleChangedImage"]
 detection_model = None
 # destSize = (640, 925) # width, height
@@ -165,6 +164,7 @@ def styleTransfer(inputFile, inputDataFile, destFile, ratio=(1.0, 1.0)) :
 	dest_color = image_processing.get_dominant_color(destFile, clusters=8)
 
 	part_change_image = []
+	now_dest_color = []
 	for i in range(MAX_OUT_IMAGE):
 		next_file_name = file_base_name + "_" + str(i) + file_extension
 		now_input_sample = random.sample(input_sample, MAX_CHANGE_COLOR)
@@ -175,7 +175,7 @@ def styleTransfer(inputFile, inputDataFile, destFile, ratio=(1.0, 1.0)) :
 			change_image = styler.change_dest_color(inputFile, next_file_name, now_dest_color[j], divided_class, resized_class_total,\
 				[now_input_sample[j]], save_flag=False, ratio=ratio)
 			part_change_image = image_processing.add_up_image(part_change_image, change_image, resized_class_total[input_sample.index(now_input_sample[j])], width, height)
-	return part_change_image
+	return part_change_image, now_dest_color
 
 def getFurnitureShape(inputFile, inputDataFile, outputFile):
 	'''
@@ -389,10 +389,22 @@ def changeWallFloor(inputFile, outputFile, wall_divided, wall_total, wall_number
 		touch_hint=wall_number.index(segmentation.FLOOR_CLASS))
 	return wfOutputFile
 
+def getRecommandFurnitureForImage(selectedPreferenceImage, str_tag):
+	[basePreferenceFiles, recommandFile] = utility.load_result(config.RECOMMAND_BASE_FILE)
+	temp = recommandFile[basePreferenceFiles.index(os.path.basename(selectedPreferenceImage))]
+	retRecomandFile = []
+	recType = "sofa" if str_tag == "sofa" or str_tag == "chair" else "table"
+	for t in temp:
+		if t not in retRecomandFile and recType in t:
+			retRecomandFile.append(t)
+	return retRecomandFile
+
 def getPartChangedImage(inputFile, outputFile, str_tag, coord, rect_files, selectedPreferenceImage, i, j, ratio=(0.5, 0.5)):
 	partChangedOutFile = utility.add_name(outputFile, "_changed_" + str(i) + str(j))
 	original_image = utility.read_image(inputFile)
 	resized_coord = utility.change_arrcoords(coord, ratio=ratio)
+	recommand_furniture = []
+	changed_log = []
 
 	for k in range(len(str_tag)):
 		if ( str_tag[k] == "sofa" or str_tag[k] == "chair" ):
@@ -402,12 +414,17 @@ def getPartChangedImage(inputFile, outputFile, str_tag, coord, rect_files, selec
 				furniture_data_file = utility.get_userinput_bin(furniture_file)
 			else:
 				furniture_data_file = utility.get_bin(furniture_file)
-			styled_furniture = styleTransfer(furniture_file, furniture_data_file, selectedPreferenceImage, ratio=ratio)
+			styled_furniture, change_color = styleTransfer(furniture_file, furniture_data_file, selectedPreferenceImage, ratio=ratio)
 			original_image = image_processing.add_up_image_to(original_image, styled_furniture, \
 				int(resized_coord[k][0]), int(resized_coord[k][1]), int(resized_coord[k][2]), int(resized_coord[k][3]))
+			rec_furn = getRecommandFurnitureForImage(selectedPreferenceImage, str_tag[k])
+			recommand_furniture.append(random.sample(rec_furn, 3))
+			changed_log.append([resized_coord[k], change_color])
 
+	out_res_file = utility.add_name(partChangedOutFile, "_result", extension=".bin")
+	utility.save_result([changed_log, recommand_furniture], out_res_file)
 	utility.save_image(original_image, partChangedOutFile)
-	return partChangedOutFile
+	return partChangedOutFile, out_res_file
 
 def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,255,255], changeLight=[178, 220, 240]):
 	'''
@@ -415,7 +432,7 @@ def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,2
 	preferenceImages 가 4장만 되어도 충분함.
 	'''
 	inputBaseFile, preferenceBaseFile = utility.file_basify(inputFile, preferenceImages)
-
+	
 	now = time.time()
 	detection_model = pspnet_50_ADE_20K()
 	outputFile = utility.get_add_dir(inputFile, "temp")
@@ -472,6 +489,9 @@ def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,2
 	# Change Object ( Table and Chair )
 	partChangedFiles = []
 	procs = []
+	recommandFurnitureList = []
+	changeFurnitureLocation = []
+	changeFurnitureColor = []
 
 	for i in range(MAX_WALL_IMAGE):
 		for j in range(MAX_PART_CHANGE_IMAGE):
@@ -490,8 +510,13 @@ def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,2
 		for i in range(len(out)):
 			if len(out[i]) > 0:
 				tout.append(out[i])
-		partChangedFiles.append(tout[-1])
-
+		[changed_log, recommand_furniture] = utility.load_result(tout[-1])
+		partChangedFiles.append(tout[-2])
+		recommandFurnitureList.append(recommand_furniture)
+		for i in range(len(changed_log)):
+			changeFurnitureLocation.append(changed_log[i][0])
+			changeFurnitureColor.append(changed_log[i][1])
+			
 	print("Part Changed Finished")
 	# Add some plant.
 	# partChangedFiles = print() # Image number will not be changed.
@@ -499,19 +524,28 @@ def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,2
 	temp = time.time()
 	print("Part Changing Time : ", temp - now)
 
+	lightList = []
 	# Change Light
 	for i in range(MAX_OUT_IMAGE):
 		print("Now Proceed : ", i)
 		files = utility.add_name(partChangedFiles[i], "_lighter")
 		if random.randint(1, MAX_OUT_IMAGE) > 4:
 			changed_file = styler.get_light_change(partChangedFiles[i], baseLight, changeLight)
+			lightList.append(changeLight)
 		else:
 			changed_file = styler.get_light_change(partChangedFiles[i], baseLight, baseLight)
+			lightList.append(baseLight)
 		utility.save_image(changed_file, files)
 		partChangedFiles[i] = files
 	# partChangedFiles 가 결국 바뀐 파일들
 	temp = time.time()
 	print("Total Time : ", temp - now)
+	changeLog = makeChangeInfor(preferWallColor, preferFloorColor, [preferenceImages[indx[0]], preferenceImages[indx[1]]], partChangedFiles, lightList, changeFurnitureLocation, changeFurnitureColor, \
+		recommandFurnitureList, [])
+	
+	resultDictionary = utility.save_log_dictionary(inputFile, partChangedFiles, changeLog)
+	with open(FILE_OUTQUEUE, 'a') as f:
+		f.write(str(resultDictionary) + "\n")
 
 def get_color_system(directory):
 	'''
@@ -587,7 +621,7 @@ def checkInput(detection_model):
 					f.write(str(out) + "\n")
 		
 		functionIndex = i
-		
+	
 def doJob(argv, detection_model):			
 	func = argv[0]
 	options = argv[1:]
@@ -596,18 +630,68 @@ def doJob(argv, detection_model):
 		lightRGB = options[1].spilt(" ")
 		light = [lightRGB[2], lightRGB[1], lightRGB[0]]	# RGB to BGR.
 
+		inputFile = options[0]
+		preferenceFiles = options[2:]
+
+		inputFile.replace("\\", "/")
+		preferenceFiles = [preferenceFiles[i].replace("\\", "/") for i in range(len(preferenceFiles))]
+
 		# 해당 라벨에 속하는 file로 image를 처리.
-		return getStyleChangedImage(options[0], options[2:], detection_model, baseLight=light)
+		return getStyleChangedImage(inputFile, preferenceFiles, detection_model, baseLight=light)
+
+def makeChangeInfor(preferWallColor, preferFloorColor, wallFloorImages, partChangedFiles, baseLight, changedFurnitureLocation, changeColor, recommandFurniture, recommandMoreFurniture):
+	'''
+	changedFurnitureLocation : 8개 사진에 대해서 ([i < 8]) 사진 내 가구들의 ([j < _]) 위치 ([k < 4]), minX, maxX, minY, maxY 순서
+	changeCOlor : 8개 사진에 대해서([i < 8]) 사진 내에 가구들에 ([j < _]) 들어간 색 리스트 ([k < _])
+	recommandFurnitureInfor : 8개 사진에 대해서 ([i < 8]) 사진 내 가구들의 ([j < _]) 추천 리스트 ([k < _])
+	recommandMoreFurnitureInfor : 사진들에 대한 추천 리스트들.
+	'''
+	changeLog = []
+
+	utility.logging(str(partChangedFiles))
+	utility.logging(str(baseLight))
+	utility.logging(str(changedFurnitureLocation))
+	utility.logging(str(changeColor))
+	utility.logging(str(recommandFurniture))
+
+	for i in range(len(partChangedFiles)):
+		wallColor = preferWallColor[0] if i < 4 else preferWallColor[1]
+		floorColor = preferFloorColor[0] if i < 4 else preferFloorColor[1]
+		wfColorImage = wallFloorImages[0] if i < 4 else wallFloorImages[1]
+		cfLocInfor = changedFurnitureLocation[i]	# 사진 내 가구들의 위치 4개의 list.
+		cfColorInfor = []
+		for j in range(len(changeColor[i])):
+			cfColorInfor.append(utility.lightStringer(changeColor[i][j]))
+
+		changedFurnitureInfor = [cfLocInfor, cfColorInfor]
+		recommandFurnitureInfor = recommandFurniture[i]		# List of file name for each index`s furniture.
+		# recommandMoreFurnitureInfor = [random.sample(recommandMoreFurniture, random.randint(1, len(recommandMoreFurniture)))]	# List of file name for this picture.
+		changeLog.append([utility.lightStringer(wallColor), utility.lightStringer(floorColor), wfColorImage, utility.lightStringer(baseLight[i]), changedFurnitureInfor, recommandFurnitureInfor])
+
+	return changeLog
 
 if __name__ == "__main__":
 	#model_name = '1'
 	#od_model = objectDetector.load_model(model_name)
+	'''
 	inputFiles = [
 		"Image/example/interior7.jpg",
 	]
 	for inputFile in inputFiles:
 		print(inputFile)
 		getStyleChangedImage(inputFile, ["interior (84).jpg", "interior (40).jpg", "interior (82).jpg"], "")
+	'''
+	inputFile = "C:\\workspace\\IOU-ML\\Image\\example\\2020-11-21T06-31-30.625Zinterior7.jpg"
+	preferenceFiles = [
+		"C:\\workspace\\IOU-ML\\Image\\InteriorImage\\represent\\2020-11-21T06-31-30.625Zinterior (84).jpg",
+		"C:\\workspace\\IOU-ML\\Image\\InteriorImage\\represent\\2020-11-21T06-31-30.625Zinterior (40).jpg",
+		"C:\\workspace\\IOU-ML\\Image\\InteriorImage\\represent\\2020-11-21T06-31-30.625Zinterior (82).jpg"
+	]
+
+	inputFile = inputFile.replace("\\", "/")
+	preferenceFiles = [preferenceFiles[i].replace("\\", "/") for i in range(len(preferenceFiles))]
+
+	getStyleChangedImage(inputFile, preferenceFiles, "")
 
 	'''
 	# Load ML Module and Read - Do ML Job

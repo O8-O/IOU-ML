@@ -601,10 +601,13 @@ def get_bin(inputFile):
 def get_od_bin(inputFile):
 	return config.RESEARCH_BASE_DIR + '/' + inputFile.split("/")[-1].split(".")[0] + "_od.bin"
 
+def get_rc_bin(inputFile):
+	return config.RESEARCH_BASE_DIR + '/' + inputFile.split("/")[-1].split(".")[0] + "_rc.bin"
+
 def file_basify(inputFile, preferenceImages):
 	# Input File : C:\\Users\\KDW\\Desktop\\KOO\\upload\\2020-11-21T06.625Zinterior (70).jpg
 	# Test 당시 InputFile Image/example/interior7.jpg, preferenceImage "interior (84).jpg", "interior (40).jpg", "interior (82).jpg"
-	if "\\" in inputFile:
+	if "Zinterior" in inputFile:
 		inputBaseFile = inputFile.split("Z")[-1]
 		preferenceBaseFile = [preferenceImages[i].split("Z")[-1] for i in range(len(preferenceImages))]
 	else:
@@ -615,3 +618,63 @@ def file_basify(inputFile, preferenceImages):
 def logging(str_data):
 	with open("logging.txt", 'a') as f:
 		f.write(str_data + "\n")
+
+def lightStringer(lightList):
+	#ligthList need to be BGR sequence.
+	lightString = "#"
+
+	for i in range(2, -1, -1):
+		lightString += str(format(lightList[i], 'x')) 	#BGR Sequence, reverse order.
+
+	return lightString
+
+def save_log_dictionary(inputFile, partChangedImage, changed_log):
+	# changeLog 는 [wallColor, floorColor, wfColorImage, utility.lightStringer(baseLight[i]), 
+	# changedFurnitureInfor, recommandFurnitureInfor] 형태의 list
+	# changedFurnitureInfor 는 [cfLocInfor, cfColorInfor]
+	
+	return {
+		"inputFile" : inputFile,
+		"changedFile" : partChangedImage,
+		"changedLog" : [make_changed_json(changed_log[i]) for i in range(len(changed_log))]
+	}
+	
+def make_changed_json(changed_log):
+	# changed_log[i] 가 입력.
+	return {
+		"wallColor" : changed_log[0],
+		"wallPicture" : changed_log[2],
+		"floorColor" : changed_log[1],
+		"floorPicture" : changed_log[2],
+		"lightColor" : changed_log[3],
+		"changedFurniture" : [ {"location": changed_log[4][0][i], "color": changed_log[4][1][i]} for i in range(len(changed_log[4])) ],
+		"recommandFurniture" : [ {"location": changed_log[4][0][i], "color": changed_log[5][i]} for i in range(len(changed_log[4]))]
+
+	}
+
+'''
+changedList[0].changedFile = "원본 파일";
+	changedList[1].changedFile = "C:/바뀐/파일/이름1.jpg";
+	changedList[1].changedJson = "바뀐 json 정보";
+	changedList[1].changedJson = {
+		wallColor : [233, 242, 172],
+		wallPicture : "C:/무엇을/통해/색이/나왔는가.jpg",
+		floorColor : [233, 242, 172],
+		floorPicture : "C:/무엇을/통해/색이/나왔는가.jpg",
+		lightColor : [255, 255, 255],
+		changedFurniture : [
+			{start : [234, 457], color : [233, 242, 172]},
+			{start : [1023, 678], color : [233, 242, 172]},
+		],
+		recommandFurniture : [
+			{start : [234, 457], pictureList : ["C:/recommand/file/path/filename1.jpg", "C:/recommand/file/path/filename2.jpg", "C:/recommand/file/path/filename3.jpg"]},
+			{start : [234, 457], pictureList : ["C:/recommand/file/path/filename1.jpg", "C:/recommand/file/path/filename2.jpg", "C:/recommand/file/path/filename3.jpg"]},
+		],
+		recommandMore : [
+			"C:/recommand/file/path/filename1.jpg", "C:/recommand/file/path/filename2.jpg", "C:/recommand/file/path/filename3.jpg"
+		]
+	};
+	// 2 ~ 8 까지 반복
+	// Job end.	changedList is full-path file list which is modified.
+}
+'''
