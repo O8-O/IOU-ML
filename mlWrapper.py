@@ -1,4 +1,5 @@
 from six import print_
+from tensorflow.python import util
 import styler
 import segmentation
 import image_processing
@@ -21,8 +22,8 @@ MAX_WALL_IMAGE = 2
 MAX_PART_CHANGE_IMAGE = 4
 COLOR_SYSTEM_FILE = "colorSystem.bin"
 RESEARCH_BASE_DIR = config.RESEARCH_BASE_DIR
-FILE_INQUEUE = RESEARCH_BASE_DIR + "fileQueue.txt"
-FILE_OUTQUEUE = RESEARCH_BASE_DIR + "fileOutQueue.txt"
+FILE_INQUEUE = RESEARCH_BASE_DIR + "/fileQueue.txt"
+FILE_OUTQUEUE = RESEARCH_BASE_DIR + "/fileOutQueue.txt"
 functionList = ["getStyleChangedImage"]
 detection_model = None
 # destSize = (640, 925) # width, height
@@ -432,7 +433,9 @@ def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,2
 	preferenceImages 가 4장만 되어도 충분함.
 	'''
 	inputBaseFile, preferenceBaseFile = utility.file_basify(inputFile, preferenceImages)
+	print(changeLight)
 	
+
 	now = time.time()
 	detection_model = pspnet_50_ADE_20K()
 	outputFile = utility.get_add_dir(inputFile, "temp")
@@ -600,44 +603,44 @@ def image_color_match(inputImage):
 
 def checkInput(detection_model):
 	with open(FILE_INQUEUE, 'r') as f:
-		lines = f.readline()
+		lines = f.readlines()
 	
+	lines = [lines[i].replace("\n", "") for i in range(len(lines))]
+	global functionList
+	if len(lines) == 0:
+		return 0
+
 	# 파일 비우기
 	f = open(FILE_INQUEUE, 'w')
 	f.close()
 
-	global functionList
-	functionIndex = 0
+	print(lines)
+	
 	i = 1
-	while i < len(lines):
-		while lines[i] not in functionList and i < len(lines):
-			i += 1
-		output = doJob(lines[functionIndex:i], detection_model)
-		# Write Output Data.
-		if output != None:
-			with open(FILE_OUTQUEUE, 'a') as f:
-				f.write("__DIV__\n")
-				for out in output:
-					f.write(str(out) + "\n")
-		
-		functionIndex = i
+	doJob(lines, detection_model)
 	
 def doJob(argv, detection_model):			
 	func = argv[0]
 	options = argv[1:]
 	if func == "getStyleChangedImage":
 		option_check(options, 2)
-		lightRGB = options[1].spilt(" ")
-		light = [lightRGB[2], lightRGB[1], lightRGB[0]]	# RGB to BGR.
+		lightRGB = options[1].split(" ")
+		light = [int(lightRGB[2]), int(lightRGB[1]), int(lightRGB[0])]	# RGB to BGR.
 
 		inputFile = options[0]
 		preferenceFiles = options[2:]
 
-		inputFile.replace("\\", "/")
+		inp = inputFile.split("\\")
+		inputFile = ""
+
+		for i in range(0, len(inp) - 1):
+			inputFile += inp[i] + "/"
+		inputFile += inp[-1]
+		
 		preferenceFiles = [preferenceFiles[i].replace("\\", "/") for i in range(len(preferenceFiles))]
 
 		# 해당 라벨에 속하는 file로 image를 처리.
-		return getStyleChangedImage(inputFile, preferenceFiles, detection_model, baseLight=light)
+		return getStyleChangedImage(inputFile, preferenceFiles, detection_model, changeLight=light)
 
 def makeChangeInfor(preferWallColor, preferFloorColor, wallFloorImages, partChangedFiles, baseLight, changedFurnitureLocation, changeColor, recommandFurniture, recommandMoreFurniture):
 	'''
@@ -647,12 +650,6 @@ def makeChangeInfor(preferWallColor, preferFloorColor, wallFloorImages, partChan
 	recommandMoreFurnitureInfor : 사진들에 대한 추천 리스트들.
 	'''
 	changeLog = []
-
-	utility.logging(str(partChangedFiles))
-	utility.logging(str(baseLight))
-	utility.logging(str(changedFurnitureLocation))
-	utility.logging(str(changeColor))
-	utility.logging(str(recommandFurniture))
 
 	for i in range(len(partChangedFiles)):
 		wallColor = preferWallColor[0] if i < 4 else preferWallColor[1]
@@ -681,31 +678,32 @@ if __name__ == "__main__":
 		print(inputFile)
 		getStyleChangedImage(inputFile, ["interior (84).jpg", "interior (40).jpg", "interior (82).jpg"], "")
 	'''
-	inputFile = "C:\\workspace\\IOU-ML\\Image\\example\\2020-11-21T06-31-30.625Zinterior7.jpg"
+	'''
+	inputFile = "C:\\workspace\\IOU-Backend\\upload\\2020-11-29T16-20-50.157Zinterior7.jpg"
 	preferenceFiles = [
-		"C:\\workspace\\IOU-ML\\Image\\InteriorImage\\represent\\2020-11-21T06-31-30.625Zinterior (84).jpg",
-		"C:\\workspace\\IOU-ML\\Image\\InteriorImage\\represent\\2020-11-21T06-31-30.625Zinterior (40).jpg",
-		"C:\\workspace\\IOU-ML\\Image\\InteriorImage\\represent\\2020-11-21T06-31-30.625Zinterior (82).jpg"
+		'C:\\workspace\\IOU-Backend\\upload\\2020-11-29T15-14-30.842Zinterior (13).jpg',
+		'C:\\workspace\\IOU-Backend\\upload\\2020-11-29T15-14-42.458Zinterior (28).jpg',
+		'C:\\workspace\\IOU-Backend\\upload\\2020-11-29T15-17-24.700Zinterior (29).jpg',
+		'C:\\workspace\\IOU-Backend\\upload\\2020-11-29T15-17-30.889Zinterior (30).jpg'
 	]
-
 	inputFile = inputFile.replace("\\", "/")
 	preferenceFiles = [preferenceFiles[i].replace("\\", "/") for i in range(len(preferenceFiles))]
 
 	getStyleChangedImage(inputFile, preferenceFiles, "")
-
 	'''
+	
 	# Load ML Module and Read - Do ML Job
 	# Model name 1 mean dataset`s folder 1.
-	model_name = '1'
-	detection_model = objectDetector.load_model(model_name)
+	#model_name = '1'
+	#detection_model = objectDetector.load_model(model_name)
 
 	print("Load Module Finished. Now can scheduling.")
 	# Scheduler for readFile.
 	while True:
-		nowTime = time.time()
+		nowTime = int(time.time())
 		# 매 2초 혹은 7초마다 5초마다 검사한다.
 		if nowTime % 10 == 2 or nowTime % 10 == 7:
 			checkInput(detection_model)
 		else:
 			time.sleep(1)	# 1초간 휴식
-	'''
+	
