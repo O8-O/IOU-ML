@@ -216,7 +216,7 @@ def to_gray_scale(image):
 
 def inpainting(imgFile, maskFile):
 	# mask 파일은 지울 부분이 흰색으로 칠해진 원래 이미지와 비슷한 사진.
-	img = cv2.imread(imgFile)
+	img = imgFile
 	mask = cv2.imread(maskFile, 0)	# cv2.IMREAD_GRAYSCALE
 
 	next_picture = cv2.inpaint(img, mask, 3, cv2.INPAINT_TELEA)

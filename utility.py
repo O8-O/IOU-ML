@@ -402,6 +402,22 @@ def resize_arr(arr, width, height):
 			output_arr[h][w] = arr[y][x]
 	return output_arr
 
+def make_whitemask_image(image, masking_coord):
+	ret_mask = np.zeros((image.shape), dtype=np.uint8)
+	(height, width, _) = image.shape
+
+	for h in range(height):
+		for w in range(width):
+			ret_mask[h][w] = [0, 0, 0]
+
+	for coord in masking_coord:
+		try:
+			ret_mask[coord[1]][coord[0]] = [255, 255, 255] # Fill white mask.
+		except:
+			pass
+
+	return ret_mask
+
 # Object Detector
 def tag_classifier(input_class):
 	# Get only our interested feature.
@@ -641,40 +657,24 @@ def save_log_dictionary(inputFile, partChangedImage, changed_log):
 	
 def make_changed_json(changed_log):
 	# changed_log[i] 가 입력.
+	logging(str(changed_log))
+	changedFd = []
+	recommendFd = []
+	for i in range(len(changed_log[4])):
+		changedFd.append({
+			"location": changed_log[4][0][i], 
+			"color": changed_log[4][1][i]
+		})
+		recommendFd.append({
+			"location": changed_log[4][0][i], 
+			"link": changed_log[5][i]
+		})
 	return {
 		"wallColor" : changed_log[0],
 		"wallPicture" : changed_log[2],
 		"floorColor" : changed_log[1],
 		"floorPicture" : changed_log[2],
 		"lightColor" : changed_log[3],
-		"changedFurniture" : [ {"location": changed_log[4][0][i], "color": changed_log[4][1][i]} for i in range(len(changed_log[4])) ],
-		"recommandFurniture" : [ {"location": changed_log[4][0][i], "color": changed_log[5][i]} for i in range(len(changed_log[4]))]
-
+		"changedFurniture" : changedFd,
+		"recommendFurniture" : recommendFd
 	}
-
-'''
-changedList[0].changedFile = "원본 파일";
-	changedList[1].changedFile = "C:/바뀐/파일/이름1.jpg";
-	changedList[1].changedJson = "바뀐 json 정보";
-	changedList[1].changedJson = {
-		wallColor : [233, 242, 172],
-		wallPicture : "C:/무엇을/통해/색이/나왔는가.jpg",
-		floorColor : [233, 242, 172],
-		floorPicture : "C:/무엇을/통해/색이/나왔는가.jpg",
-		lightColor : [255, 255, 255],
-		changedFurniture : [
-			{start : [234, 457], color : [233, 242, 172]},
-			{start : [1023, 678], color : [233, 242, 172]},
-		],
-		recommandFurniture : [
-			{start : [234, 457], pictureList : ["C:/recommand/file/path/filename1.jpg", "C:/recommand/file/path/filename2.jpg", "C:/recommand/file/path/filename3.jpg"]},
-			{start : [234, 457], pictureList : ["C:/recommand/file/path/filename1.jpg", "C:/recommand/file/path/filename2.jpg", "C:/recommand/file/path/filename3.jpg"]},
-		],
-		recommandMore : [
-			"C:/recommand/file/path/filename1.jpg", "C:/recommand/file/path/filename2.jpg", "C:/recommand/file/path/filename3.jpg"
-		]
-	};
-	// 2 ~ 8 까지 반복
-	// Job end.	changedList is full-path file list which is modified.
-}
-'''

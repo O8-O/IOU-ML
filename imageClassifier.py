@@ -139,88 +139,25 @@ def classifyAndMove(total_parameter, total_files, labelDir):
 	for i in range(len(labels)):
 		utility.move_into(total_files[i], labelDir[labels[i]])
 
-def addWallFloorParameter():
-	[files, domColors, wallColors, floorColors] = utility.load_result(config.RESEARCH_BASE_FILE)
-	wallFloorColorList = [["interior (84).jpg", [210, 207, 202], [143, 167, 197]],
-	["interior (8).jpg",	[170, 172, 180],	[211, 213, 224]],
-	["interior (70).jpg",	[16, 63, 241],	[190, 208, 216]],
-	["interior (79).jpg",	[99, 111, 117],	[208, 219, 221]],
-	["interior (80).jpg",	[158, 155, 150],	[154, 157, 165]],
-	["interior (82).jpg",	[241, 238, 232],	[70, 98, 128]],
-	["interior (83).jpg",	[162, 209, 226],	[189, 177, 169]],
-	["interior (56).jpg",	[177, 191, 208],	[68, 66, 75]],
-	["interior (40).jpg",	[160, 146, 140],	[192, 184, 207]],
-	["interior (35).jpg",	[239, 238, 242],	[70, 100, 160]],
-	["interior (34).jpg",	[198, 193, 194],	[75, 67, 68]],
-	["interior (30).jpg",	[223, 224, 228],	[40, 65, 109]],
-	["interior (29).jpg",	[255, 255, 255],	[255, 255, 255]],
-	["interior (28).jpg",	[67, 81, 139],	[69, 91, 119]],
-	["interior (13).jpg",	[53, 166, 198],	[48, 69, 77]],
-	["interior (1).jpg",	[220, 219, 221],	[57, 90, 135]]]
-	wallFiles = []
-	for wfFile in wallFloorColorList:
-		wallFiles.append(wfFile[0])
-	for f in files:
-		indx = wallFiles.index(os.path.basename(f))
-		wallColors[indx] = wallFloorColorList[indx][1]
-		floorColors[indx] = wallFloorColorList[indx][2]
-	utility.save_result([files, domColors, wallColors, floorColors], config.RESEARCH_BASE_FILE)
-
-def makeSofaUrl(sofa):
-	return config.RESEARCH_BASE_DIR + "/furniture/sofa/" + sofa
-
-def makeTableUrl(table):
-	return config.RESEARCH_BASE_DIR + "/furniture/table/" + table
-
-def addRecommandFiles():
-	inputFileList = ["interior (84).jpg", "interior (8).jpg", "interior (70).jpg", "interior (79).jpg",\
-		"interior (80).jpg", "interior (82).jpg", "interior (83).jpg", "interior (56).jpg", \
-		"interior (40).jpg", "interior (35).jpg", "interior (34).jpg", "interior (30).jpg", \
-		"interior (29).jpg", "interior (28).jpg", "interior (13).jpg",  "interior (1).jpg", ]
-	recomandList = [
-		[makeSofaUrl("s33.jpg"), makeSofaUrl("s25.jpg"), makeSofaUrl("s80.jpg"), makeSofaUrl("s21.jpg"), makeSofaUrl("s156.jpg"), makeTableUrl("34.jpg"), makeTableUrl("13.jpg")],
-		[ ],
-		[makeSofaUrl("s13.jpg"), makeSofaUrl("s17.jpg"), makeSofaUrl("s137.jpg"), makeSofaUrl("s136.jpg"), makeSofaUrl("s149.jpg"),\
-			makeTableUrl("59.jpg"), makeTableUrl("10.jpg"), makeTableUrl("43.jpg"), makeTableUrl("44.jpg")],
-		[makeSofaUrl("s22.jpg"), makeSofaUrl("s24.jpg"), makeSofaUrl("s33.jpg"), makeSofaUrl("s41.jpg"), makeSofaUrl("s42.jpg"),\
-			makeTableUrl("18.jpg"), makeTableUrl("42.jpg"), makeTableUrl("45.jpg")],
-		[makeSofaUrl("s73.jpg"), makeSofaUrl("s60.jpg"), makeSofaUrl("s58.jpg"), makeSofaUrl("s59.jpg"), makeSofaUrl("s132.jpg"), makeSofaUrl("s156.jpg"),\
-			makeTableUrl("82.jpg"), makeTableUrl("83.jpg"), makeTableUrl("3.jpg")],
-		[makeSofaUrl("s151.jpg"), makeSofaUrl("s152.jpg"), makeSofaUrl("s156.jpg"),\
-			makeTableUrl("8.jpg"), makeTableUrl("45.jpg"), makeTableUrl("58.jpg")],
-		[makeSofaUrl("s136.jpg"), makeSofaUrl("s137.jpg"), makeSofaUrl("s143.jpg"), makeSofaUrl("s144.jpg"), makeSofaUrl("s59.jpg"), makeSofaUrl("s69.jpg"),\
-			makeTableUrl("9.jpg"), makeTableUrl("5.jpg"), makeTableUrl("16.jpg")],
-		[makeSofaUrl("s41.jpg"), makeSofaUrl("s38.jpg"), makeSofaUrl("s150.jpg"), makeSofaUrl("s151.jpg"), makeSofaUrl("s13.jpg"),\
-			makeTableUrl("5.jpg"), makeTableUrl("15.jpg"), makeTableUrl("51.jpg")],
-		[makeTableUrl("52.jpg"), makeTableUrl("41.jpg"), makeTableUrl("64.jpg"), makeTableUrl("70.jpg"), makeTableUrl("66.jpg"), makeTableUrl("65.jpg")],
-		[makeSofaUrl("s13.jpg"), makeSofaUrl("55.jpg"), makeSofaUrl("s48.jpg"), makeSofaUrl("s49.jpg"), makeSofaUrl("s12.jpg"),\
-			makeTableUrl("59.jpg"), makeTableUrl("10.jpg"), makeTableUrl("43.jpg"), makeTableUrl("44.jpg")],
-		[makeSofaUrl("s65.jpg"), makeSofaUrl("s73.jpg"), makeSofaUrl("s74.jpg"), makeSofaUrl("s149.jpg"), makeSofaUrl("s142.jpg"), makeSofaUrl("s66.jpg"),\
-			makeTableUrl("89.jpg"), makeTableUrl("67.jpg"), makeTableUrl("55.jpg"), makeTableUrl("56.jpg")],
-		[makeTableUrl("50.jpg"), makeTableUrl("66.jpg"), makeTableUrl("71.jpg"), makeTableUrl("88.jpg")],
-		[makeSofaUrl("s133.jpg"), makeSofaUrl("s135.jpg"), makeSofaUrl("s139.jpg"), makeSofaUrl("s149.jpg"),\
-			makeTableUrl("43.jpg"), makeTableUrl("37.jpg"), makeTableUrl("59.jpg"), makeTableUrl("67.jpg")],
-		[makeSofaUrl("s22.jpg"), makeSofaUrl("s26.jpg"), makeSofaUrl("s29.jpg"), makeSofaUrl("s11.jpg"), makeSofaUrl("s18.jpg"), makeSofaUrl("s19.jpg"),\
-			makeTableUrl("4.jpg"), makeTableUrl("8.jpg"), makeTableUrl("5.jpg"), makeTableUrl("1.jpg")],
-		[makeSofaUrl("s25.jpg"), makeSofaUrl("s26.jpg"), makeSofaUrl("s35.jpg"), makeSofaUrl("s36.jpg"), makeSofaUrl("s41.jpg"), makeSofaUrl("s43.jpg"),\
-			makeTableUrl("23.jpg"), makeTableUrl("58.jpg"), makeTableUrl("88.jpg")],
-		[makeSofaUrl("s18.jpg"), makeSofaUrl("s19.jpg"), makeSofaUrl("s16.jpg"), makeSofaUrl("s151.jpg"), makeSofaUrl("s154.jpg"), makeSofaUrl("s150.jpg"),\
-			makeTableUrl("35.jpg"), makeTableUrl("2.jpg"), makeTableUrl("42.jpg")],
-	]
-	utility.save_result([inputFileList, recomandList], config.RECOMMAND_BASE_FILE)
-
-if __name__ == "__main__":
-	'''
-	fileDir = "Image/Interior"
-	labelDir = ["label0", "label1", "label2", "label3"]
+import segmentation
+def segment(inputFile, outputFile, outputDataFile, total=True):
+	divided_class, class_number, class_total, class_border, _, _, class_color, largest_mask, width, height = \
+	segmentation.get_divided_class(inputFile, total=total)
+	utility.save_result([divided_class, class_number, class_total, class_border, largest_mask], outputDataFile)
 	
-	for ld in labelDir:
-		utility.make_dir(fileDir + "/" + ld)
-	'''
+	dc_image = utility.divided_class_into_image(divided_class, class_number, class_color, width, height, class_number)
+	if not outputFile == None:
+		utility.save_image(dc_image, outputFile)
 
-	#saveParameters("C:/workspace/IOU-ML/Image/InteriorImage/represent")
-	# addWallFloorParameter()
-	addRecommandFiles()
-	[basePreferenceFiles, recommandFile] = utility.load_result(config.RECOMMAND_BASE_FILE)
-	#parameter, files = readParameter(fileDir)
-	#classifyAndMove(parameter, files, labelDir)
+def re_segmentation(fileDir, resegIndex):
+	fileNames = utility.get_filenames(fileDir)
+	for fIndex in range(len(fileNames)):
+		f = fileNames[fIndex]
+		odf = utility.get_od_bin(f)
+		[coord, str_tag, number_tag, score, rect_files, additional_infor, n_color] = utility.load_result(odf)
+
+		for i in resegIndex[fIndex]:
+			rect_data_file = utility.get_bin(rect_files[i])
+			print(rect_data_file, " will be re-generated. : ", str_tag[i])
+			segment(rect_files[i], utility.add_name(rect_files[i], "_divided"), rect_data_file)
+

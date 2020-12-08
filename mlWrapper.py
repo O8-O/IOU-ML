@@ -1,5 +1,3 @@
-from six import print_
-from tensorflow.python import util
 import styler
 import segmentation
 import image_processing
@@ -9,6 +7,7 @@ import objectDetector
 import random
 import cv2
 import time
+import imageClassifier
 import numpy as np
 import config
 import subprocess
@@ -123,7 +122,7 @@ def textureTransferArea(inputFile, inputDataFile, outputFileName, destTexture, s
 	destArea = styler.get_similar_color_area(divided_class, class_number, class_total, class_color, srcColor, 240) # Simmilar Color threshold to 200.
 	styler.change_area_style(inputFile, outputFileName, destTexture, destArea)
 
-def styleTransfer(inputFile, inputDataFile, destFile, ratio=(1.0, 1.0)) :
+def styleTransfer(inputFile, inputDataFile, destFile, inpaintingRandomValue, ratio=(1.0, 1.0)) :
 	'''
 	입력받은 inputFile의 색과 질감을 destFile의 색과 질감으로 임의로 변형해준다. 
 	'''
@@ -164,14 +163,29 @@ def styleTransfer(inputFile, inputDataFile, destFile, ratio=(1.0, 1.0)) :
 		input_sample *= int(MAX_CHANGE_COLOR // len(input_sample)) + 1 
 	dest_color = image_processing.get_dominant_color(destFile, clusters=8)
 
-	part_change_image = []
-	now_dest_color = []
-	for i in range(MAX_OUT_IMAGE):
-		next_file_name = file_base_name + "_" + str(i) + file_extension
-		now_input_sample = random.sample(input_sample, MAX_CHANGE_COLOR)
-		now_dest_color = random.sample(dest_color, MAX_CHANGE_COLOR)
-		part_change_image = utility.read_image(inputFile)
-		part_change_image = utility.resize_image(part_change_image, ratio=ratio)
+	next_file_name = file_base_name + "_" + str(0) + file_extension
+	now_input_sample = random.sample(input_sample, MAX_CHANGE_COLOR)
+	now_dest_color = random.sample(dest_color, MAX_CHANGE_COLOR)
+	part_change_image = utility.read_image(inputFile)
+	part_change_image = utility.resize_image(part_change_image, ratio=ratio)
+	randomValue = inpaintingRandomValue
+	
+	if randomValue < -1:
+		# Image Inpainting
+		masking_coord = []
+		for ct in resized_class_total:
+			masking_coord += ct
+		tempFile = utility.add_name(next_file_name, "_temp")
+		tempFile = config.RESEARCH_BASE_DIR + "/temp/" + tempFile.split("/")[-1]
+		
+		utility.logging("Image Inpainting Starting." + str(randomValue))
+		utility.save_image(utility.make_whitemask_image(part_change_image, masking_coord), tempFile)
+		change_image = image_processing.inpainting(part_change_image, tempFile)
+		part_change_image = image_processing.add_up_image(part_change_image, change_image, masking_coord, width, height)
+		now_dest_color = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
+	else:
+		utility.logging("Image Inpainting Do not proceed. : " + str(randomValue))
+		# If not earse, recoloring.
 		for j in range(MAX_CHANGE_COLOR):
 			change_image = styler.change_dest_color(inputFile, next_file_name, now_dest_color[j], divided_class, resized_class_total,\
 				[now_input_sample[j]], save_flag=False, ratio=ratio)
@@ -366,9 +380,11 @@ def getStyleChangedImage_past(inputFile, preferenceImages, tempdata="temp"):
 	return returnImageList
 
 def getODandSegment(inputFile, od_model):
-	# [coord, str_tag, number_tag, score, rect_files, additional_infor, n_color] = imageClassifier.saveParameter(inputFile, od_model) # Get OD Data
-	[coord, str_tag, number_tag, score, rect_files, additional_infor, n_color] = \
-	utility.load_result(config.RESEARCH_BASE_DIR + "/" + os.path.basename(utility.get_od_bin(inputFile)))
+	try:
+		[coord, str_tag, number_tag, score, rect_files, additional_infor, n_color] = \
+		utility.load_result(config.RESEARCH_BASE_DIR + "/" + os.path.basename(utility.get_od_bin(inputFile)))
+	except:
+		[coord, str_tag, number_tag, score, rect_files, additional_infor, n_color] = imageClassifier.saveParameter(inputFile, od_model) # Get OD Data
 	for i in range(len(str_tag)):
 		if str_tag[i] == "sofa" or str_tag[i] == "chair":
 			if utility.is_exist(utility.get_userinput_bin(rect_files[i])):
@@ -409,17 +425,23 @@ def getPartChangedImage(inputFile, outputFile, str_tag, coord, rect_files, selec
 
 	for k in range(len(str_tag)):
 		if ( str_tag[k] == "sofa" or str_tag[k] == "chair" ):
+			inpaintingRandomValue = random.randint(0, 9)
 			furniture_file = rect_files[k]
 			# 만약 userinput 이 있다면, 그것을 대신 사용.
 			if utility.is_exist(utility.get_userinput_bin(furniture_file)):
 				furniture_data_file = utility.get_userinput_bin(furniture_file)
 			else:
 				furniture_data_file = utility.get_bin(furniture_file)
-			styled_furniture, change_color = styleTransfer(furniture_file, furniture_data_file, selectedPreferenceImage, ratio=ratio)
+			styled_furniture, change_color = styleTransfer(furniture_file, furniture_data_file, selectedPreferenceImage, inpaintingRandomValue, ratio=ratio)
 			original_image = image_processing.add_up_image_to(original_image, styled_furniture, \
 				int(resized_coord[k][0]), int(resized_coord[k][1]), int(resized_coord[k][2]), int(resized_coord[k][3]))
 			rec_furn = getRecommandFurnitureForImage(selectedPreferenceImage, str_tag[k])
-			recommand_furniture.append(random.sample(rec_furn, 3))
+			if len(rec_furn) < 3:
+				utility.logging(selectedPreferenceImage)
+				utility.logging(str(rec_furn))
+				recommand_furniture.append(["", "", ""])
+			else:
+				recommand_furniture.append(random.sample(rec_furn, 3))
 			changed_log.append([resized_coord[k], change_color])
 
 	out_res_file = utility.add_name(partChangedOutFile, "_result", extension=".bin")
@@ -432,9 +454,10 @@ def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,2
 	입력 Color는 BGR ( [178, 220, 240] 은 주황불빛 )
 	preferenceImages 가 4장만 되어도 충분함.
 	'''
+	if len(preferenceImages) <= 2:
+		preferenceImages = preferenceImages + preferenceImages
+	print(preferenceImages)
 	inputBaseFile, preferenceBaseFile = utility.file_basify(inputFile, preferenceImages)
-	print(changeLight)
-	
 
 	now = time.time()
 	detection_model = pspnet_50_ADE_20K()
@@ -547,8 +570,9 @@ def getStyleChangedImage(inputFile, preferenceImages, od_model, baseLight=[255,2
 		recommandFurnitureList, [])
 	
 	resultDictionary = utility.save_log_dictionary(inputFile, partChangedFiles, changeLog)
+	utility.logging(str(resultDictionary))
 	with open(FILE_OUTQUEUE, 'a') as f:
-		f.write(str(resultDictionary) + "\n")
+		f.write(str(resultDictionary) + "\n") 
 
 def get_color_system(directory):
 	'''
@@ -600,7 +624,7 @@ def image_color_match(inputImage):
 	utility.print_image(utility.color_to_image(input_colors))
 	
 	return admitableColors, admitableFiles
-
+	
 def checkInput(detection_model):
 	with open(FILE_INQUEUE, 'r') as f:
 		lines = f.readlines()
@@ -612,6 +636,7 @@ def checkInput(detection_model):
 
 	# 파일 비우기
 	f = open(FILE_INQUEUE, 'w')
+	f.write("")
 	f.close()
 
 	print(lines)
@@ -679,31 +704,36 @@ if __name__ == "__main__":
 		getStyleChangedImage(inputFile, ["interior (84).jpg", "interior (40).jpg", "interior (82).jpg"], "")
 	'''
 	'''
-	inputFile = "C:\\workspace\\IOU-Backend\\upload\\2020-11-29T16-20-50.157Zinterior7.jpg"
+	
+	inputFile = "C:\\workspace\\IOU-Backend\\upload\\2020-12-01T17-37-47.706Zinterior (105).jpg"
 	preferenceFiles = [
-		'C:\\workspace\\IOU-Backend\\upload\\2020-11-29T15-14-30.842Zinterior (13).jpg',
-		'C:\\workspace\\IOU-Backend\\upload\\2020-11-29T15-14-42.458Zinterior (28).jpg',
-		'C:\\workspace\\IOU-Backend\\upload\\2020-11-29T15-17-24.700Zinterior (29).jpg',
-		'C:\\workspace\\IOU-Backend\\upload\\2020-11-29T15-17-30.889Zinterior (30).jpg'
+		'C:\\workspace\\IOU-Backend\\upload\\2020-11-29T15-17-40.130Zinterior (35).jpg',
 	]
 	inputFile = inputFile.replace("\\", "/")
 	preferenceFiles = [preferenceFiles[i].replace("\\", "/") for i in range(len(preferenceFiles))]
 
-	getStyleChangedImage(inputFile, preferenceFiles, "")
-	'''
+	getStyleChangedImage(inputFile, preferenceFiles, "", changeLight=[206, 250, 255])
 	
+	'''
+	'''
 	# Load ML Module and Read - Do ML Job
 	# Model name 1 mean dataset`s folder 1.
-	#model_name = '1'
-	#detection_model = objectDetector.load_model(model_name)
+	model_name = '1'
+	detection_model = objectDetector.load_model(model_name)
+	files = utility.get_filenames("C:/workspace/IOU-ML/Image/example/example")
+	for f in files:
+		print("Now doing : ", f)
+		getStyleChangedImage(f, ["", ""], detection_model)
 
+	'''
+	
 	print("Load Module Finished. Now can scheduling.")
 	# Scheduler for readFile.
 	while True:
 		nowTime = int(time.time())
 		# 매 2초 혹은 7초마다 5초마다 검사한다.
 		if nowTime % 10 == 2 or nowTime % 10 == 7:
-			checkInput(detection_model)
+			checkInput("")
 		else:
 			time.sleep(1)	# 1초간 휴식
 	
