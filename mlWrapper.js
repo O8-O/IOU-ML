@@ -1,108 +1,101 @@
-const { PythonShell } = require("python-shell");
+const fs = require('fs');
+
+ML_DATA = "C:/MLDATA/"
+FILE_INQUEUE = ML_DATA + "fileQueue.txt";
+FILE_OUTQUEUE = ML_DATA + "fileOutQueue.txt";
 
 module.exports =  class MlWrapper {
 	constructor() { }
 
-	runner(options) {
+	requestServiceStart(requestImage, preferenceImage, preferenceLight) {
+		// Only can using getStyleChangedImage.
+		console.log("Request Start.");
+		var reqFunction = "getStyleChangedImage";	
+		var reqString = reqFunction + "\n" + requestImage + "\n";
+		if(preferenceLight == null) reqString += "255 255 255\n";
+		else reqString += String(parseInt(preferenceLight[1] + preferenceLight[2], 16)) + " " + String(parseInt(preferenceLight[3] + preferenceLight[4], 16)) + " " + String(parseInt(preferenceLight[5] + preferenceLight[6], 16)) + "\n"
+		for(var i = 0 ; i < preferenceImage.length; i++) {
+			reqString += preferenceImage[i] + "\n"
+		}
+		fs.writeFile(FILE_INQUEUE, reqString, () => {});
+	}
+
+	checkServiceEnd() {
 		return new Promise((res, rej) => {
-			PythonShell.run("C:/workspace/IOU-Backend/util/IOU-ML/mlWrapper.py", options, (err, data) => {
-				console.log(data);
-				if(err != null)	 rej(err);
-				else  res(data);
-			})
+			fs.readFile(FILE_OUTQUEUE, (err, data) => {
+				if(err) rej(err);
+				var result = String(data).split("\n");
+				if(result.length == 0 || result[0].length == 0) { res([]); }
+				else {
+					var resultData = result[0].replace(/\//g, "\\\\");
+					resultData = resultData.replace(/'/g, "\"");
+					var changedData = JSON.parse(resultData);
+					var changedList = [];
+					changedList.push({changedFile: changedData.inputFile});
+
+					for(var i = 0; i < changedData.changedFile.length; i++) {
+						changedList.push({
+							changedFile: changedData.changedFile[i],
+							changedJson: changedData.changedLog[i]
+						})
+					}
+
+					console.log(changedList);
+					fs.writeFile(FILE_OUTQUEUE, "", () => {});
+					res(changedList);
+				}
+			});
 		});
-	}
-
-	segmentation(inputFile, outputFile, outputDataFile) {
-		//입력받은 파일을 Segmentation 해서 output한다. Output 한 결과는 조각난 사진 모음.
-		var options = {args : ["segment", inputFile, outputFile, outputDataFile]};
-		return this.runner(options);
-	}
-
-	colorTransferToCoord(inputFile, inputDataFile, outputFileName, destColor, destCoordList) {
-		// 입력받은 inputFile의 정해진 부분( destCoordList )의 색을 destColor로 변경한다.
-		var options = {args : ["colorTransferToCoord", inputFile, inputDataFile, outputFileName, destColor, destCoordList]};
-		return this.runner(options);
-	}
-
-	colorTransferToColor(inputFile, inputDataFile, destColor, srcColor) {
-		// 입력받은 inputFile의 정해진 부분( srcColor와 비슷한 부분 )의 색을 destColor로 변경한다.
-		var options = {args : ["colorTransferToColor", inputFile, inputDataFile, destColor, srcColor]};
-		return this.runner(options);
-	}
-
-	colorTransferWithImage(inputFile, inputDataFile, outputFileName, destImage) {
-		/*
-		입력받은 inputFile의 색을 destImage와 비슷하게 변경해서 outputFileName에 저장한다.
-		Segmentation이 된다면 자른 부분만 변경.
-		*/
-		var options = {args : ["colorTransferWithImage", inputFile, inputDataFile, outputFileName, destImage]};
-		return this.runner(options);
-	}
-
-	textureTransferToCoord(inputFile, inputDataFile, outputFileName, destTexture, destCoordList) {
-		// 입력받은 inputFile의 정해진 부분( destCoordList )의 질감을 destTexture로 변경한다.
-		var options = {args : ["textureTransfer", inputFile, inputDataFile, outputFileName, destTexture, destCoordList]};
-		return this.runner(options);
-	}
-
-	textureTransferArea(inputFile, inputDataFile, outputFileName, destTexture, srcColor) {
-		// 입력받은 inputFile의 정해진 부분( srcColor와 비슷한 색 )의 질감을 destTexture로 변경한다.
-		var options = {args : ["textureTransfer", inputFile, inputDataFile, outputFileName, destTexture, srcColor]};
-		return this.runner(options);
-	}
-
-	styleTransfer(inputFile, inputDataFile, destFile) {
-		// 입력받은 inputFile의 색과 질감을 destFile의 색과 질감으로 임의로 변형해준다. 
-		var options = {args : ["styleTransfer", inputFile, inputDataFile, destFile]};
-		return this.runner(options);
-	}
-
-	objectDect(inputFile, outputFile) {
-		// 입력받은 inputFile의 가구를 ObjectDetection한 결과를 outputFile에 저장한다. json 형태로 저장한다. 현재는 bin file로만 입출력이 가능.
-		var options = {args : ["objectDect", inputFile, outputFile, outputDataFile]};
-		return this.runner(options);
-	}
-
-	analysisFurnitureParameter(inputFile, outputFile) {
-		// Not Implemented.
-		var options = {args : ["analysisFurnitureParameter", inputFile, outputFile, outputDataFile]};
-		return this.runner(options);
-	}
-
-	analysisInteriorParameter(inputFile, outputFile) {
-		// Not Implemented.
-		var options = {args : ["analysisInteriorParameter", inputFile, outputFile, outputDataFile]};
-		return this.runner(options);
-	}
-
-	getStyleChangedImage(inputFile, userPreferenceImage) {
-		// inputFile : 사용자가 올린 파일.
-		// userPreferenceImage : 사용자가 좋아하는 파일 List.
-		var arrayOption = ["getStyleChangedImage", inputFile]
-		if(typeof userPreferenceImage == typeof "") {
-			arrayOption.push(userPreferenceImage)
-		}
-		else {
-			for(var i = 0; i < userPreferenceImage.length; i++) {
-				arrayOption.push(userPreferenceImage[i])
-			}
-		}
-		var options = {args : arrayOption};
-		return this.runner(options);
 	}
 }
 
 /*
-// 사용 예시 
-ml = new MlWrapper();
-ml.getStyleChangedImage("C:\\workspace\\IOU-Backend\\upload\\2020-10-27T14-20-32.598Zinterior7.jpg", "").then(
-	(data)=> {
-		console.log(data);
-		console.log("Success!");
-	},
-	(err)=> {
-		console.log(err);
-		console.log("Fail!");
+// 사용 예시
+const mlWrapper = require("./mlWrapper");
+
+var mlCaller = new mlWrapper();
+// If request, requestImage, preferenceImageList and preferenceLight. Image link need to be full-path. ( Not relative )
+// Light might be RGB order.
+mlCaller.requestServiceStart("example/file/to/link.jpg", ["prefer1.jpg", "prefer2.jpg", "prefer3.jpg"], [192, 234, 170]);
+
+// ... or if no light color specification,
+mlCaller.requestServiceStart("example/file/to/link.jpg", ["prefer1.jpg", "prefer2.jpg", "prefer3.jpg"], null);
+
+// and you can check job end like this.
+mlCaller.checkServiceEnd()
+.then((changedList) => {
+	if(changedList.length == 0) {
+		// Job not end
 	}
-);*/
+	else {
+		console.log("hmm?");
+	}
+})
+.catch((err) => {
+	console.log(err);
+});
+
+changedList[0].changedFile = "원본 파일";
+changedList[1].changedFile = "C:/바뀐/파일/이름1.jpg";
+changedList[1].changedJson = "바뀐 json 정보";
+changedList[1].changedJson = {
+	wallColor : [233, 242, 172],
+	wallPicture : "C:/무엇을/통해/색이/나왔는가.jpg",
+	floorColor : [233, 242, 172],
+	floorPicture : "C:/무엇을/통해/색이/나왔는가.jpg",
+	lightColor : [255, 255, 255],
+	changedFurniture : [
+		{start : [234, 457], color : [233, 242, 172]},
+		{start : [1023, 678], color : [233, 242, 172]},
+	],
+	recommandFurniture : [
+		{start : [234, 457], pictureList : ["C:/recommand/file/path/filename1.jpg", "C:/recommand/file/path/filename2.jpg", "C:/recommand/file/path/filename3.jpg"]},
+		{start : [234, 457], pictureList : ["C:/recommand/file/path/filename1.jpg", "C:/recommand/file/path/filename2.jpg", "C:/recommand/file/path/filename3.jpg"]},
+	],
+	recommandMore : [
+		"C:/recommand/file/path/filename1.jpg", "C:/recommand/file/path/filename2.jpg", "C:/recommand/file/path/filename3.jpg"
+	]
+};
+// 2 ~ 8 까지 반복
+// Job end.	changedList is full-path file list which is modified.
+ */

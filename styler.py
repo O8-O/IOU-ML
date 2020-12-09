@@ -8,6 +8,7 @@ import cv2
 import utility
 import image_processing
 import matrix_processing
+from utility import print_image
 
 def set_style(content_image_name, style_image_name):
 	content_image = utility.load_image(content_image_name)
@@ -20,15 +21,24 @@ def set_style(content_image_name, style_image_name):
 	outputs = hub_module(tf.constant(content_image), tf.constant(style_image))
 	return outputs[0]
 
-def set_color_with_color(content_image_name, stlye_color, a=5, b=1, change_style="median"):
+def set_color_with_color(content_image_name, stlye_color, a=5, b=1, change_style="median", light_color=[255, 255, 255], ratio=(1.0, 1.0)):
+	# Style Color need to be RGB Color.
 	img = cv2.imread(content_image_name)
-	img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+	img = utility.resize_image(img, ratio=ratio)
 	(height, width, _) = img.shape
 	styled_image = np.zeros(img.shape, dtype=np.uint8)
 
+	grayscale_input = cv2.imread(content_image_name, cv2.IMREAD_GRAYSCALE)
+	grayscale_input = utility.resize_2darr(grayscale_input, ratio=ratio)
+	stlye_color = lighter(stlye_color, limit=270)
+
 	for h in range(height):
-		for w in range(width):
-			styled_image[h][w] = image_processing.blend_color(img[h][w], stlye_color, a=a, b=b, change_style=change_style)
+		for  w in range(width):
+			light_power = (grayscale_input[h][w] / 255) ** 3
+			for i in range(3):
+				color_value = img[h][w][i] - int(light_color[i] * light_power / 2)
+				color_value = color_value + int(stlye_color[i] * light_power)
+				styled_image[h][w][i] = color_value if color_value < 255 else 255
 
 	return styled_image
 
@@ -76,16 +86,22 @@ def set_color_with_image(input_file, color_file, mask_map, decrease_ratio=(0.1, 
 	part_change_image = image_processing.add_up_image(original_image, source, all_class_total, width, height)
 	return part_change_image
 
-def change_dest_color(input_file, output_file, setting_color, divided_class, class_total, touch_list, a=5, b=1, change_style="median"):
-	colored_image = set_color_with_color(input_file, setting_color, a=a, b=b, change_style=change_style)
+def change_dest_color(input_file, output_file, setting_color, divided_class, class_total, touch_list, touch_hint=None, a=5, b=1, change_style="median", save_flag=True, ratio=(1.0, 1.0)):
+	colored_image = set_color_with_color(input_file, setting_color, a=a, b=b, change_style=change_style, ratio=ratio)
 
-	ret_class_total	= utility.get_class_with_given_coord(class_total, touch_list)
+	if touch_hint == None:
+		ret_class_total	= utility.get_class_with_given_coord(class_total, touch_list)
+	else:
+		ret_class_total = class_total[touch_hint]
 	original_image = utility.read_image(input_file)
+	original_image = utility.resize_image(original_image, ratio=ratio)
 	(height, width, _) = original_image.shape
 
 	# Change ret_class_total`s part with colored image.
 	part_change_image = image_processing.add_up_image(original_image, colored_image, ret_class_total, width, height)
-	utility.save_image(part_change_image, output_file)
+	if save_flag:
+		utility.save_image(part_change_image, output_file)
+	return part_change_image
 
 def change_dest_texture(input_file, output_file, texture_file, divided_class, class_total, touch_list):
 	stylized_image = set_style(input_file, texture_file)
@@ -196,3 +212,69 @@ def get_similar_color_area_adjac(divided_class, class_number, class_total, class
 			return_class_total += class_total[i]
 	
 	return return_class_total
+
+def turn_off_light(input_file, light_color):
+	original_input = cv2.imread(input_file)
+	grayscale_input = cv2.imread(input_file, cv2.IMREAD_GRAYSCALE)
+	(height, width, _) = original_input.shape
+	output_image = np.zeros((height, width, 3), dtype=np.uint8)
+
+	for h in range(height):
+		for  w in range(width):
+			light_power = (grayscale_input[h][w] / 255) ** 3
+			for i in range(3):
+				if original_input[h][w][i] < int(light_color[i] * light_power):
+					color_value = original_input[h][w][i] - int(light_color[i] * light_power / 2)
+				else:
+					color_value = original_input[h][w][i] - int(light_color[i] * light_power)
+				output_image[h][w][i] = color_value if color_value > 0 else 0
+	
+	return output_image
+
+def turn_on_light(input_file, turn_off_picture, light_color):
+	grayscale_input = cv2.imread(input_file, cv2.IMREAD_GRAYSCALE)
+	(height, width) = grayscale_input.shape
+	output_image = np.zeros((height, width, 3), dtype=np.uint8)
+	lighter_color = lighter(light_color)
+
+	for h in range(height):
+		for  w in range(width):
+			light_power = (grayscale_input[h][w] / 255) ** 3
+			for i in range(3):
+				color_value = turn_off_picture[h][w][i] + int(lighter_color[i] * light_power)
+				output_image[h][w][i] = color_value if color_value < 255 else 255
+	
+	return output_image
+
+def lighter(color, limit=680):
+	add_all = 0
+	ret_color = [0, 0, 0]
+	for i in range(3):
+		ret_color[i] = color[i]
+		add_all += ret_color[i]
+	
+	r_ratio = (255 - color[0]) / 100
+	g_ratio = (255 - color[1]) / 100
+	b_ratio = (255 - color[2]) / 100
+
+	while add_all < limit:
+		ret_color[0] += r_ratio
+		ret_color[1] += g_ratio
+		ret_color[2] += b_ratio
+		add_all = 0
+		for i in range(3):
+			add_all += ret_color[i]
+
+	return ret_color
+
+def get_light_change(inputFile, baseLight, changeLight):
+	turn_off_picture = turn_off_light(inputFile, baseLight)
+	turn_on_picture = turn_on_light(inputFile, turn_off_picture, changeLight)
+	return turn_on_picture
+
+if __name__ == "__main__":
+	file_name = "Image/example/interior1.jpg"
+	turn_off_picture = turn_off_light(file_name, [255, 255, 255])
+	# turn_on_picture = turn_on_light(file_name, turn_off_picture, [255, 157, 65])
+	turn_on_picture = turn_on_light(file_name, turn_off_picture, [178, 220, 240])
+	print_image(turn_on_picture)

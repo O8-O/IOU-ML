@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-from numpy.lib import utils
 from sklearn.cluster import KMeans
 
 def get_only_instance_image(input_file, mask, width, height, show=False):
@@ -28,6 +27,48 @@ def get_only_instance_image(input_file, mask, width, height, show=False):
 						mask_num += 1
 
 	return masked_image, mask_num
+
+def get_total_instance_image(masks, width, height, base=True):
+    	# Set masks total part base.
+	mask = np.zeros((height, width))
+	for h in range(height):
+		for w in range(width):
+			mask[h][w] = not base
+			for m in masks:
+				if m[h][w]:
+					mask[h][w] = base
+					break
+	return mask
+
+def divied_three_part(mask, width, height):
+	part_coord = [[], [], [], []]
+	divided_class = np.zeros((height, width), dtype=np.uint8)
+	for h in range(0, int(height/3)):
+		for w in range(width):
+			if mask[h][w]:
+				divided_class[h][w] = 1
+				part_coord[1].append((w, h))
+			else:
+				part_coord[0].append((w, h))
+				
+		
+	for h in range(int(height/3), int(height/3)*2):
+		for w in range(width):
+			if mask[h][w]:
+				divided_class[h][w] = 2
+				part_coord[2].append((w, h))
+			else:
+				part_coord[0].append((w, h))
+
+	for h in range(int(height/3)*2, int(height/3)*3):
+		for w in range(width):
+			if mask[h][w]:
+				divided_class[h][w] = 3
+				part_coord[3].append((w, h))
+			else:
+				part_coord[0].append((w, h))
+	
+	return divided_class, part_coord
 
 def get_contours(frame, clipLimit=16.0, tileGridSize=(16, 16), start=190, diff=30):
 	'''
@@ -74,12 +115,18 @@ def get_class_color(image, class_total, class_count, color_function=get_average_
 	return class_color
 
 def add_up_image(original_image, add_image, add_coord, width, height):
-	output_image = np.zeros([height, width, 3], dtype=np.uint8)
-	for h in range(height):
-		for w in range(width):
+	output_image = np.zeros(original_image.shape, dtype=np.uint8)
+	(he, wi, _) = output_image.shape
+	for h in range(he):
+		for w in range(wi):
 			output_image[h][w] = original_image[h][w]
+	
 	for coord in add_coord:
-		output_image[coord[1]][coord[0]] = add_image[coord[1]][coord[0]]
+		try:
+			if coord[0] < wi and coord[1] < he and coord[0] >= 0 and coord[1] >= 0:
+				output_image[coord[1]][coord[0]] = add_image[coord[1]][coord[0]]
+		except:
+			continue
 	return output_image
 
 def get_dominant_color(image, clusters=20):
@@ -105,7 +152,7 @@ def add_up_image_to(image, add_image, min_x, max_x, min_y, max_y):
 	(original_h, original_w, _) = image.shape
 	width = max_x - min_x
 	height = max_y - min_y
-	
+
 	if add_h * add_w > width * height:
 		resize_add_image = cv2.resize(add_image, (width, height), interpolation=cv2.INTER_AREA)
 	else:
@@ -115,10 +162,13 @@ def add_up_image_to(image, add_image, min_x, max_x, min_y, max_y):
 	for y in range(original_h):
 		for x in range(original_w):
 			output_image[y][x] = image[y][x]
-			
-	for y in range(min_y, max_y):
-		for x in range(min_x, max_x):
-			output_image[y][x] = resize_add_image[y - min_y][x - min_x]
+	
+	for y in range(height):
+		for x in range(width):
+			try:
+				output_image[min_y + y][min_x + x] = resize_add_image[y][x]
+			except:
+				continue
 	
 	return output_image
 
@@ -163,6 +213,14 @@ def blend_color(color1, color2, change_style="median", a=1, b=1):
 def to_gray_scale(image):
 	image_arr = cv2.imread(image)
 	return cv2.cvtColor(image_arr, cv2.COLOR_BGR2GRAY)
+
+def inpainting(imgFile, maskFile):
+	# mask 파일은 지울 부분이 흰색으로 칠해진 원래 이미지와 비슷한 사진.
+	img = imgFile
+	mask = cv2.imread(maskFile, 0)	# cv2.IMREAD_GRAYSCALE
+
+	next_picture = cv2.inpaint(img, mask, 3, cv2.INPAINT_TELEA)
+	return next_picture
 
 # Object Detector
 def get_rect_image(f, x_min, x_max, y_min, y_max):

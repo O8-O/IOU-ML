@@ -2,3 +2,6 @@ Image/*
 __pycache__/*
 node_modules/*
 datasets/*
+dat.py
+logging.txt
+image.js

@@ -124,6 +124,26 @@ def get_divided_class(mask, width, height):
 	
 	return divided_class, class_boundary, class_count, class_length
 
+def divided_class_into_class_total(divided_class):
+	height = len(divided_class)
+	width = len(divided_class[0])
+	class_total = [[], [], []]
+	class_number = [0, 1, 2]
+	
+	for h in range(height):
+		for w in range(width):
+			if divided_class[h][w] == 0:
+				# Nothing class
+				class_total[0].append((w,h))
+			elif divided_class[h][w] == 1:
+				# Wall class
+				class_total[1].append((w,h))
+			elif divided_class[h][w] == 2:
+				# Floor class
+				class_total[2].append((w,h))
+
+	return class_total, class_number
+
 def get_largest_part(mask, width, height, attach_ratio=0.15):
 	'''
 		TODO	: attach_ration 이유 정하기
